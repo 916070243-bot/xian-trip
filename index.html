@@ -561,6 +561,60 @@ html, body {
 }
 .t-card.done .t-check::after { content: "✓"; font-size: 9px; line-height: 1; color: #fff; font-weight: 700; }
 
+/* ==================== 行程编辑（新增 / 修改 / 删除） ==================== */
+/* 编辑模式下的卡片操作按钮 */
+.t-edit-ops { display: none; margin-left: auto; gap: 6px; flex-shrink: 0; }
+body.plan-editing .t-edit-ops { display: flex; }
+.t-edit-ops button {
+  width: 26px; height: 26px; padding: 0;
+  border: 1px solid var(--border-strong); border-radius: 6px;
+  background: #fff; font-size: 12px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; font-family: inherit;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.t-edit-ops .pe-edit { border-color: #fcd34d; background: #fffbeb; }
+.t-edit-ops .pe-del  { border-color: #fecaca; background: #fff5f5; }
+body.plan-editing .t-card { border-style: dashed; }
+
+/* 底部「添加一项」按钮 */
+.plan-add-btn {
+  display: none;
+  margin: 2px 20px 14px; padding: 11px 0; width: calc(100% - 40px);
+  border: 1.5px dashed var(--border-strong); border-radius: 10px;
+  background: #fffdf7; color: var(--text-secondary);
+  font-size: 13px; font-family: inherit; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+body.plan-editing .plan-add-btn { display: block; }
+.plan-add-btn:active { background: #fff7e6; }
+
+/* 编辑弹窗 */
+.modal-plan { width: 92%; max-width: 400px; max-height: 92vh; overflow-y: auto; }
+.modal textarea {
+  width: 100%; padding: 8px 10px; min-height: 66px; resize: vertical;
+  border: 1px solid var(--border-strong); border-radius: 6px;
+  font-size: 14px; font-family: inherit; color: var(--text-primary);
+}
+.pi-cat-row { display: flex; gap: 8px; margin-top: 2px; }
+.pi-cat-btn {
+  flex: 1; padding: 9px 2px; border: 1.5px solid var(--border-strong); border-radius: 8px;
+  background: #fff; font-size: 12px; font-family: inherit; color: var(--text-primary);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.pi-cat-btn.active { background: #fff7ed; border-color: #d4af37; font-weight: 600; }
+.pi-loc-box {
+  margin-top: 2px; padding: 9px 10px; border: 1px solid var(--border-strong);
+  border-radius: 8px; background: #fafaf6;
+}
+.pi-loc-name { font-size: 13px; font-weight: 600; }
+.pi-loc-name.empty { font-weight: 400; color: var(--text-muted, #9ca3af); }
+.pi-loc-coord { margin-top: 3px; font-size: 11px; color: var(--text-secondary); }
+.pi-loc-actions { display: flex; gap: 8px; margin-top: 8px; }
+.pi-loc-actions .modal-btn { flex: 1; padding: 7px 8px; font-size: 12px; }
+#pi-del-btn { margin-right: auto; color: #dc2626; border-color: #fecaca; background: #fff5f5; }
+#plan-edit-btn.editing { background: #d4af37; color: #fff; border-color: #d4af37; }
+
 /* 图例 */
 .legend {
   display: flex; gap: 14px; flex-wrap: wrap;
@@ -1336,6 +1390,7 @@ html, body {
             <button class="budget-edit-btn" id="budget-edit-btn" type="button" onclick="openBudgetModal()">预算清单</button>
             <button class="budget-edit-btn expense-btn" id="expense-edit-btn" type="button" onclick="openExpenseModal()">＋ 记支出</button>
             <button class="budget-edit-btn" id="share-btn" type="button" onclick="shareTrip()" title="复制带房间号的链接，发给朋友即可一起编辑">🔗 分享协同</button>
+            <button class="budget-edit-btn" id="plan-edit-btn" type="button" onclick="togglePlanEdit()" title="新增 / 修改 / 删除行程项">✎ 编辑行程</button>
           </div>
         </div>
         <div class="budget-row">
@@ -1382,6 +1437,8 @@ html, body {
     </div>
 
     <div class="timeline" id="timeline"></div>
+
+    <button class="plan-add-btn" id="plan-add-btn" type="button" onclick="openPlanItem(-1)">＋ 添加一项</button>
 
     <div class="legend">
       <div class="legend-item"><span class="legend-dot l-att"></span>景点</div>
@@ -1564,6 +1621,46 @@ html, body {
   </div>
 </div>
 
+<!-- ============ 行程项编辑 / 新增 ============ -->
+<div class="modal-mask" id="plan-item-modal">
+  <div class="modal modal-plan">
+    <h3 id="pi-modal-title">＋ 新增行程项</h3>
+
+    <label>时间</label>
+    <input type="time" id="pi-time" />
+
+    <label style="margin-top:12px;">标题</label>
+    <input type="text" id="pi-title" placeholder="例如：大唐芙蓉园旅拍" autocomplete="off" />
+
+    <label style="margin-top:12px;">分类</label>
+    <div class="pi-cat-row">
+      <button type="button" class="pi-cat-btn" data-cat="att" onclick="pickPlanCat('att')">🏛 景点</button>
+      <button type="button" class="pi-cat-btn" data-cat="food" onclick="pickPlanCat('food')">🍜 美食</button>
+      <button type="button" class="pi-cat-btn" data-cat="cul" onclick="pickPlanCat('cul')">🏮 文化</button>
+      <button type="button" class="pi-cat-btn" data-cat="shop" onclick="pickPlanCat('shop')">🛍 购物</button>
+    </div>
+
+    <label style="margin-top:14px;">地点（可留空，之后也能改）</label>
+    <div class="pi-loc-box">
+      <div class="pi-loc-name empty" id="pi-loc-name">未设置</div>
+      <div class="pi-loc-coord" id="pi-loc-coord">— , —</div>
+      <div class="pi-loc-actions">
+        <button class="modal-btn" type="button" onclick="openPlanLocPicker()">🔍 搜索地点</button>
+        <button class="modal-btn" type="button" onclick="clearPlanLoc()">清除</button>
+      </div>
+    </div>
+
+    <label style="margin-top:14px;">备注</label>
+    <textarea id="pi-note" placeholder="门票、交通、预约提示…"></textarea>
+
+    <div class="modal-actions">
+      <button class="modal-btn" id="pi-del-btn" type="button" onclick="askDeletePlanItem()" style="display:none;">🗑 删除</button>
+      <button class="modal-btn" onclick="closePlanItem()">取消</button>
+      <button class="modal-btn primary" onclick="savePlanItem()">保存</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-mask" id="hotel-modal">
   <div class="modal modal-hotel">
     <h3 id="hotel-modal-title">🏨 设置酒店</h3>
@@ -1696,13 +1793,25 @@ const TRIP = {
 const STORAGE_KEY = "xian-trip-v1";
 
 // 把当前 TRIP 状态收集成可序列化对象（本地存储 + 多人同步共用）
+const STATE_V = 2;    // 存档结构版本：v2 起把行程项本体（含新增/删除）也同步
+
 function collectState() {
   const done = TRIP.days.map(d => d.items.map(it => !!it.done));
   return {
+    v: STATE_V,
     currentDay: TRIP.currentDay,
     budgets: TRIP.budgets,
     expenses: TRIP.expenses,
     hotels: TRIP.hotels,
+    // 行程项本体：新增 / 修改 / 删除后别人也能看到
+    items: TRIP.days.map(d => d.items.map(it => ({
+      t: it.t || "", title: it.title || "", note: it.note || "",
+      cat: it.cat || "att", done: !!it.done, hotelRef: !!it.hotelRef,
+      location: it.location ? {
+        name: it.location.name || "", addr: it.location.addr || "",
+        lat: it.location.lat, lng: it.location.lng
+      } : null
+    }))),
     done
   };
 }
@@ -1727,6 +1836,21 @@ function applyState(state) {
       if (cur) Object.assign(cur, saved);
     });
   }
+  // v2：整份行程项（新增 / 删除 / 修改都能同步）；老存档（无 v）忽略，只按 done 合并
+  if (state.v >= 2 && Array.isArray(state.items)) {
+    TRIP.days.forEach((d, di) => {
+      const arr = state.items[di];
+      if (!Array.isArray(arr)) return;
+      d.items = arr.map(raw => {
+        const it = Object.assign({}, raw);
+        if (!it.location || typeof it.location !== "object") it.location = null;
+        if (typeof it.cat !== "string") it.cat = "att";
+        return it;
+      });
+    });
+    return;   // items 里已带 done，无需再走旧逻辑
+  }
+
   if (state.done) {
     TRIP.days.forEach((d, di) => {
       d.items.forEach((it, ii) => {
@@ -1914,7 +2038,8 @@ function shareTrip() {
 let state = {
   activeDay: 1,
   activeCardIdx: -1,
-  mapReady: false
+  mapReady: false,
+  editMode: false      // 行程编辑模式：可新增 / 修改 / 删除
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -2020,6 +2145,10 @@ function renderTimeline() {
         <div class="t-time">
           <span class="t-time-bubble">${it.t || ""}</span>
           <div class="t-check" title="标记完成"></div>
+          <div class="t-edit-ops">
+            <button type="button" class="pe-edit" title="修改这一项">✏️</button>
+            <button type="button" class="pe-del" title="删除这一项">🗑</button>
+          </div>
         </div>
         <h3 class="t-title">${it.title}</h3>
         <div class="t-meta">
@@ -2033,12 +2162,23 @@ function renderTimeline() {
         ${it.note ? `<p class="t-note">${it.note}</p>` : ""}
       </div>
     `;
-    // 点击卡片主体 → 地图飞过去（排除勾选、地点链接、地点按钮）
+    // 点击卡片主体 → 编辑模式下打开编辑弹窗，否则地图飞过去
     card.querySelector(".t-body").addEventListener("click", (e) => {
       if (e.target.closest(".t-check")) return;
+      if (e.target.closest(".t-edit-ops")) return;
       if (e.target.closest(".loc-link")) return;
       if (e.target.closest(".loc-edit-btn")) return;
+      if (state.editMode) { openPlanItem(idx); return; }
       focusOnPOI(idx);
+    });
+    // 编辑/删除小按钮
+    card.querySelector(".t-edit-ops .pe-edit").addEventListener("click", (e) => {
+      e.stopPropagation();
+      openPlanItem(idx);
+    });
+    card.querySelector(".t-edit-ops .pe-del").addEventListener("click", (e) => {
+      e.stopPropagation();
+      askDeletePlanItem(idx);
     });
     // 勾选完成
     card.querySelector(".t-check").addEventListener("click", (e) => {
@@ -2061,6 +2201,10 @@ function renderTimeline() {
     });
     t.appendChild(card);
   });
+
+  // 底部「添加一项」按钮文案随当前天变化
+  const addBtn = document.getElementById("plan-add-btn");
+  if (addBtn) addBtn.textContent = `＋ 给 Day ${day.n} 添加一项`;
 }
 
 /* 地点内联编辑：点开 → input → blur/Enter 保存到当前 POI 的 location.name
@@ -3229,6 +3373,186 @@ function openLocationActions(source) {
 
 /* ---------- 打开 APP 前的 iOS 风格确认 ---------- */
 // HTML 转义（防止地点名里的 < > & 破坏结构）
+/* ============================================================
+   行程编辑：新增 / 修改 / 删除（编辑模式下操作，自动同步给同房间好友）
+============================================================ */
+let piCtx = null;          // { dayN, idx }  idx = -1 表示新增
+let piDraftLoc = null;     // 编辑弹窗里选中的地点 { name, addr, lat, lng }
+let piLocChanged = false;  // 用户是否真的改过地点（避免改标题时清掉 hotelRef）
+
+// 进入 / 退出编辑模式
+function togglePlanEdit() {
+  state.editMode = !state.editMode;
+  document.body.classList.toggle("plan-editing", state.editMode);
+  const btn = document.getElementById("plan-edit-btn");
+  if (btn) {
+    btn.textContent = state.editMode ? "✓ 完成编辑" : "✎ 编辑行程";
+    btn.classList.toggle("editing", state.editMode);
+  }
+  showToast(state.editMode ? "已进入编辑模式 · 可新增 / 修改 / 删除" : "已退出编辑模式");
+  renderTimeline();
+}
+
+// idx = -1 新增；否则修改第 idx 项
+function openPlanItem(idx) {
+  const day = currentDayData();
+  if (!day) return;
+  piCtx = { dayN: day.n, idx };
+  const it = idx >= 0 ? day.items[idx] : null;
+  piDraftLoc = (it && it.location)
+    ? { name: it.location.name || "", addr: it.location.addr || "", lat: it.location.lat, lng: it.location.lng }
+    : null;
+  piLocChanged = false;
+
+  document.getElementById("pi-modal-title").textContent = it ? "✏️ 修改行程项" : "＋ 新增行程项";
+  document.getElementById("pi-time").value  = it && it.t ? it.t : "";
+  document.getElementById("pi-title").value = it ? it.title : "";
+  document.getElementById("pi-note").value  = it && it.note ? it.note : "";
+  const cat = it && it.cat ? it.cat : "att";
+  document.querySelectorAll(".pi-cat-btn").forEach(b => b.classList.toggle("active", b.dataset.cat === cat));
+
+  piRenderLoc();
+  const delBtn = document.getElementById("pi-del-btn");
+  if (delBtn) delBtn.style.display = it ? "" : "none";
+
+  document.getElementById("plan-item-modal").style.display = "flex";
+  document.getElementById("plan-item-modal").onclick = (e) => {
+    if (e.target.id === "plan-item-modal") closePlanItem();
+  };
+  if (!it) setTimeout(() => { try { document.getElementById("pi-title").focus(); } catch (e) {} }, 120);
+}
+
+function piRenderLoc() {
+  const el = document.getElementById("pi-loc-name");
+  const has = !!(piDraftLoc && piDraftLoc.name);
+  el.textContent = has ? piDraftLoc.name : "未设置（可留空）";
+  el.classList.toggle("empty", !has);
+  document.getElementById("pi-loc-coord").textContent =
+    has && isFinite(piDraftLoc.lat) && isFinite(piDraftLoc.lng)
+      ? `${piDraftLoc.lat.toFixed(5)}, ${piDraftLoc.lng.toFixed(5)}`
+      : "— , —";
+}
+
+function pickPlanCat(cat) {
+  document.querySelectorAll(".pi-cat-btn").forEach(b => b.classList.toggle("active", b.dataset.cat === cat));
+}
+
+function clearPlanLoc() {
+  piDraftLoc = null;
+  piLocChanged = true;
+  piRenderLoc();
+}
+
+// 打开地点搜索弹窗（保留编辑弹窗上下文，回填坐标）
+function openPlanLocPicker() {
+  const startKw = (piDraftLoc && piDraftLoc.name) || (document.getElementById("pi-title").value || "");
+  // 暂时收起编辑弹窗，搜索完回调里再恢复
+  document.getElementById("plan-item-modal").style.display = "none";
+  openLocPicker({
+    kind: "draft",
+    dayN: piCtx ? piCtx.dayN : state.activeDay,
+    kw: startKw,
+    onPick: (p) => {
+      piDraftLoc = { name: p.name, addr: p.addr || "", lat: p.lat, lng: p.lng };
+      piLocChanged = true;
+      document.getElementById("plan-item-modal").style.display = "flex";
+      piRenderLoc();
+    },
+    onCancel: () => {
+      document.getElementById("plan-item-modal").style.display = "flex";
+    }
+  });
+}
+
+function closePlanItem() {
+  document.getElementById("plan-item-modal").style.display = "none";
+  piCtx = null; piDraftLoc = null; piLocChanged = false;
+}
+
+function savePlanItem() {
+  if (!piCtx) return;
+  const day = TRIP.days.find(d => d.n === piCtx.dayN);
+  if (!day) return;
+  const title = (document.getElementById("pi-title").value || "").trim();
+  if (!title) { showToast("请先填写标题"); return; }
+  const t   = (document.getElementById("pi-time").value || "").trim();
+  const note = (document.getElementById("pi-note").value || "").trim();
+  const catBtn = document.querySelector(".pi-cat-btn.active");
+  const cat = catBtn ? catBtn.dataset.cat : "att";
+  const isUpdate = piCtx.idx >= 0;
+  const wasTitle = isUpdate ? day.items[piCtx.idx].title : "";
+
+  if (isUpdate) {
+    const it = day.items[piCtx.idx];
+    if (!it) { closePlanItem(); return; }
+    it.t = t; it.title = title; it.note = note; it.cat = cat;
+    if (piLocChanged) {
+      it.hotelRef = false;
+      it.location = piDraftLoc
+        ? { name: piDraftLoc.name, addr: piDraftLoc.addr || "", lat: piDraftLoc.lat, lng: piDraftLoc.lng }
+        : null;
+    }
+  } else {
+    const newItem = {
+      t, title, note, cat, done: false,
+      location: piDraftLoc
+        ? { name: piDraftLoc.name, addr: piDraftLoc.addr || "", lat: piDraftLoc.lat, lng: piDraftLoc.lng }
+        : null
+    };
+    day.items.push(newItem);
+    // 按时间排序（HH:MM 字符串可字典序比较）；无时间的放最后
+    day.items.sort((a, b) => {
+      const ta = (a.t || "99:99").slice(0, 5);
+      const tb = (b.t || "99:99").slice(0, 5);
+      return ta < tb ? -1 : ta > tb ? 1 : 0;
+    });
+  }
+  saveState();
+  closePlanItem();
+  refreshAll();
+  showToast(isUpdate ? "✓ 已保存修改" : `✓ 已添加：${title || wasTitle}`);
+}
+
+function askDeletePlanItem(idx) {
+  const day = currentDayData(); if (!day || !day.items[idx]) return;
+  const it = day.items[idx];
+  askConfirm({
+    title: "删除这一项？",
+    body: `「${it.title}」将被删除，不可恢复。`,
+    okText: "删除",
+    onConfirm: () => {
+      day.items.splice(idx, 1);
+      if (state.activeCardIdx === idx) state.activeCardIdx = -1;
+      saveState();
+      refreshAll();
+      showToast("🗑 已删除");
+    }
+  });
+}
+
+// 通用确认弹窗（复用 app-confirm-modal）
+function askConfirm({ title, body, okText, onConfirm }) {
+  const mask = document.getElementById("app-confirm-modal");
+  if (!mask) { if (window.confirm(title)) try { onConfirm && onConfirm(); } catch (e) {} return; }
+  document.getElementById("app-confirm-title").textContent = title || "确认";
+  document.getElementById("app-confirm-body").innerHTML =
+    `${escHTML(body || "")}<br><span style="font-size:12px;color:#888;">此操作会同步给同房间的好友</span>`;
+  const ok = document.getElementById("app-confirm-ok");
+  ok.textContent = okText || "确定";
+  ok.onclick = () => { closeAppConfirm(); try { onConfirm && onConfirm(); } catch (e) {} };
+  mask.style.display = "flex";
+}
+
+// 局部刷新（Tabs / 时间线 / Banner / 地图）
+function refreshAll() {
+  try { renderTabs(); } catch (e) {}
+  try { renderTimeline(); } catch (e) {}
+  try { renderBanner(); } catch (e) {}
+  if (window.__bmapReady && typeof renderMap === "function") {
+    try { renderMap(); } catch (e) {}
+  }
+}
+
 function escHTML(s) {
   return String(s == null ? "" : s)
     .replace(/&/g, "&amp;")
@@ -3267,10 +3591,11 @@ function openLocPicker(source) {
   lpPicked = null;
 
   const day = TRIP.days.find(d => d.n === source.dayN);
-  let title = "📍 选择地点", cur = "";
+  let titleText = "📍 选择地点", cur = "";
   const isHotel = source.kind === "hotel";
+  const isDraft = source.kind === "draft";
 
-  // 酒店专属：显示"应用到"选项 + 重置为 only
+  // 酒店专属：显示"应用到"选项 + 重置为 only；草稿模式全隐藏
   const applyRangeEl = document.getElementById("lp-apply-range");
   if (applyRangeEl) applyRangeEl.style.display = isHotel ? "flex" : "none";
   if (isHotel) {
@@ -3282,24 +3607,27 @@ function openLocPicker(source) {
 
   if (isHotel) {
     const h = getHotelForDay(source.dayN);
-    title = `🏨 选择酒店 · Day ${source.dayN}`;
+    titleText = `🏨 选择酒店 · Day ${source.dayN}`;
     cur = h && h.address ? h.address : (h && h.name ? h.name : "");
+  } else if (isDraft) {
+    titleText = "📍 选择地点（编辑项）";
+    cur = source.kw || "";
   } else if (day) {
     const it = day.items[source.idx];
     if (!it) return;
-    title = `📍 ${it.title}`;
+    titleText = `📍 ${it.title}`;
     const d0 = resolveItemLocation(it, source.dayN);
     cur = d0 && d0.name ? d0.name : "";
   }
-  document.getElementById("lp-title").textContent = title;
+  document.getElementById("lp-title").textContent = titleText;
 
   const kw = document.getElementById("lp-keyword");
   kw.value = cur || "";
   document.getElementById("lp-picked-name").textContent = cur || "未选择";
-  const h0 = getHotelForDay(source.dayN);
-  const curCoord = source.kind === "poi"
-    ? (day && day.items[source.idx] && day.items[source.idx].location)
-    : h0;
+  const curCoord = isDraft ? null
+                  : (source.kind === "poi"
+                       ? (day && day.items[source.idx] && day.items[source.idx].location)
+                       : getHotelForDay(source.dayN));
   document.getElementById("lp-coord").textContent =
     (curCoord && isFinite(curCoord.lat) && isFinite(curCoord.lng))
       ? `${curCoord.lat.toFixed(5)}, ${curCoord.lng.toFixed(5)}`
@@ -3321,9 +3649,15 @@ function openLocPicker(source) {
 }
 
 function closeLocPicker() {
+  // 草稿模式：用户取消时把编辑弹窗调回来
+  const ctx = lpCtx;
+  const wasDraft = ctx && ctx.kind === "draft";
   document.getElementById("loc-picker-modal").style.display = "none";
   lpCtx = null; lpPicked = null;
   if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+  if (wasDraft && typeof ctx.onCancel === "function") {
+    try { ctx.onCancel(); } catch (e) {}
+  }
 }
 
 function lpOnInput() {
@@ -3439,6 +3773,16 @@ function lpApplyManual() {
 function confirmLocPicker() {
   if (!lpCtx) { closeLocPicker(); return; }
   if (!lpPicked) { showToast("先从搜索结果里选一个地址"); return; }
+
+  // 草稿模式：只回调，不写入任何数据
+  if (lpCtx.kind === "draft") {
+    const cb = lpCtx.onPick;
+    const p = lpPicked;
+    closeLocPicker();
+    if (typeof cb === "function") { try { cb(p); } catch (e) {} }
+    return;
+  }
+
   const day = TRIP.days.find(d => d.n === lpCtx.dayN);
   if (!day) { closeLocPicker(); return; }
 
