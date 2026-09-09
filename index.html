@@ -679,6 +679,7 @@ html, body {
   display: flex;
   gap: 6px;
   margin-left: 8px;
+  flex-wrap: wrap;          /* 窄屏自动换行，第三个按钮不挤 */
 }
 .budget-btn-group .budget-edit-btn { margin-left: 0; }
 .expense-btn {
@@ -686,6 +687,20 @@ html, body {
   border-color: rgba(255,255,255,0.55);
 }
 .expense-btn:hover { background: rgba(255,255,255,0.42); }
+
+/* 分享协同按钮：连上中继后显示绿点，一眼看出现在是不是协同状态 */
+#share-btn { position: relative; }
+#share-btn.sync-live::before {
+  content: "";
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  margin-right: 5px;
+  vertical-align: middle;
+  box-shadow: 0 0 0 2px rgba(34,197,94,0.28);
+}
+#share-btn.sync-live { border-color: rgba(134,239,172,0.9); }
 
 .budget-cat-list {
   margin-top: 6px;
@@ -1048,6 +1063,7 @@ html, body {
           <div class="budget-btn-group">
             <button class="budget-edit-btn" id="budget-edit-btn" type="button" onclick="openBudgetModal()">预算清单</button>
             <button class="budget-edit-btn expense-btn" id="expense-edit-btn" type="button" onclick="openExpenseModal()">＋ 记支出</button>
+            <button class="budget-edit-btn" id="share-btn" type="button" onclick="shareTrip()" title="复制带房间号的链接，发给朋友即可一起编辑">🔗 分享协同</button>
           </div>
         </div>
         <div class="budget-row">
@@ -1345,48 +1361,217 @@ const TRIP = {
 ============================================================ */
 const STORAGE_KEY = "xian-trip-v1";
 
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const state = JSON.parse(raw);
-    if (typeof state.currentDay === "number") TRIP.currentDay = state.currentDay;
-    if (state.budgets) {
-      // 兼容旧结构：老版本只有 total/spent
-      if (typeof state.budgets.total === "number") TRIP.budgets.total = state.budgets.total;
-      if (state.budgets.categories) {
-        TRIP.budgets.categories = Object.assign(TRIP.budgets.categories || {}, state.budgets.categories);
-      }
-    }
-    if (Array.isArray(state.expenses)) TRIP.expenses = state.expenses;
-    if (Array.isArray(state.hotels) && state.hotels.length) {
-      // 按 day 对齐合并（兼容新旧版本）
-      state.hotels.forEach(saved => {
-        if (!saved || typeof saved.day !== "number") return;
-        const cur = TRIP.hotels.find(x => x.day === saved.day);
-        if (cur) Object.assign(cur, saved);
-      });
-    }
-    if (state.done) {
-      TRIP.days.forEach((d, di) => {
-        d.items.forEach((it, ii) => {
-          if (state.done[di] && state.done[di][ii]) it.done = true;
-        });
-      });
-    }
-  } catch (e) {}
-}
-
-function saveState() {
+// 把当前 TRIP 状态收集成可序列化对象（本地存储 + 多人同步共用）
+function collectState() {
   const done = TRIP.days.map(d => d.items.map(it => !!it.done));
-  const state = {
+  return {
     currentDay: TRIP.currentDay,
     budgets: TRIP.budgets,
     expenses: TRIP.expenses,
     hotels: TRIP.hotels,
     done
   };
+}
+
+// 把一份 state 合并进 TRIP（本地读取 + 远端同步共用）
+function applyState(state) {
+  if (!state) return;
+  if (typeof state.currentDay === "number") TRIP.currentDay = state.currentDay;
+  if (state.budgets) {
+    // 兼容旧结构：老版本只有 total/spent
+    if (typeof state.budgets.total === "number") TRIP.budgets.total = state.budgets.total;
+    if (state.budgets.categories) {
+      TRIP.budgets.categories = Object.assign(TRIP.budgets.categories || {}, state.budgets.categories);
+    }
+  }
+  if (Array.isArray(state.expenses)) TRIP.expenses = state.expenses;
+  if (Array.isArray(state.hotels) && state.hotels.length) {
+    // 按 day 对齐合并（兼容新旧版本）
+    state.hotels.forEach(saved => {
+      if (!saved || typeof saved.day !== "number") return;
+      const cur = TRIP.hotels.find(x => x.day === saved.day);
+      if (cur) Object.assign(cur, saved);
+    });
+  }
+  if (state.done) {
+    TRIP.days.forEach((d, di) => {
+      d.items.forEach((it, ii) => {
+        if (state.done[di] && state.done[di][ii]) it.done = true;
+      });
+    });
+    // 远端取消了勾选时也要同步回来（不能直接 return，要双向赋值）
+    TRIP.days.forEach((d, di) => {
+      d.items.forEach((it, ii) => {
+        if (state.done[di] && typeof state.done[di][ii] === "boolean") {
+          it.done = state.done[di][ii];
+        }
+      });
+    });
+  }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    applyState(JSON.parse(raw));
+  } catch (e) {}
+}
+
+function saveState() {
+  const state = collectState();
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  // 广播给同一房间的其他人（TripSync 未就绪或正在应用远端时会自动跳过）
+  try { if (typeof TripSync !== "undefined") TripSync.push(state); } catch (e) {}
+}
+
+/* ============================================================
+   多人实时同步（MQTT 公共中继，免配置）
+   - 同一房间的所有人共享一份行程数据（酒店 / 预算 / 支出 / 完成状态）
+   - 房间号在 URL 的 ?room= 上，把链接发给朋友即可进同一房间
+   - 走公开 broker，内容不加密 —— 别写密码、身份证等敏感信息
+============================================================ */
+const TripSync = {
+  uid: "u-" + Math.random().toString(36).slice(2, 10),
+  room: "",
+  client: null,
+  topic: "",
+  ready: false,
+  applying: false,   // 正在应用远端数据 → 此时不广播，避免来回踢皮球
+  lastTs: 0,
+
+  // 房间号：优先取 URL 上的 ?room=，没有就随机生成一个并写回地址栏
+  initRoom() {
+    let room = "";
+    try { room = new URLSearchParams(location.search).get("room") || ""; } catch (e) {}
+    if (!room) room = "trip-" + Math.random().toString(36).slice(2, 8);
+    try {
+      const u = new URL(location.href);
+      if (u.searchParams.get("room") !== room) {
+        u.searchParams.set("room", room);
+        history.replaceState(null, "", u.toString());  // 改地址栏但不刷新
+      }
+    } catch (e) {}
+    this.room = room;
+    return room;
+  },
+
+  loadSDK() {
+    return new Promise((resolve, reject) => {
+      if (typeof window.mqtt !== "undefined") return resolve(window.mqtt);
+      const CDNS = [
+        "https://cdn.jsdelivr.net/npm/mqtt@4.3.7/dist/mqtt.min.js",
+        "https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"
+      ];
+      let i = 0, settled = false;
+      const done = (fn, arg) => { if (!settled) { settled = true; fn(arg); } };
+      const load = () => {
+        if (i >= CDNS.length) return done(reject, new Error("中继库加载失败"));
+        const s = document.createElement("script");
+        s.src = CDNS[i++];
+        s.async = true;
+        s.onload = () => { window.mqtt ? done(resolve, window.mqtt) : load(); };
+        s.onerror = load;
+        document.head.appendChild(s);
+      };
+      load();
+      setTimeout(() => done(reject, new Error("中继库加载超时")), 10000);
+    });
+  },
+
+  connect() {
+    const self = this;
+    this.initRoom();
+    return this.loadSDK().then((mqtt) => new Promise((resolve) => {
+      let client;
+      try {
+        client = mqtt.connect("wss://broker.emqx.io:8084/mqtt", {
+          clientId: "xian-" + Math.random().toString(36).slice(2, 12),
+          keepalive: 25, clean: true, connectTimeout: 8000, reconnectPeriod: 3000
+        });
+      } catch (e) { return resolve(false); }
+
+      let settled = false;
+      const finish = (ok) => {
+        if (settled) return;
+        settled = true;
+        if (ok) return resolve(true);
+        try { client.end(true); } catch (e) {}
+        resolve(false);
+      };
+
+      client.on("connect", () => {
+        self.client = client;
+        self.topic = "xiantrip/v1/" + self.room;
+        client.subscribe(self.topic, { qos: 0 }, (err) => {
+          if (err) { self.client = null; return finish(false); }
+          self.ready = true;
+          finish(true);
+          self.push(collectState());   // 进房先广播一次，让后来的人拿到最新数据
+        });
+      });
+      client.on("message", (topic, payload) => self.onMessage(payload));
+      client.on("error", () => finish(false));
+      client.on("close", () => { self.ready = false; if (!settled) finish(false); });
+      setTimeout(() => { if (!self.ready) finish(false); }, 9000);
+    })).catch(() => false);
+  },
+
+  push(state) {
+    if (!this.ready || !this.client || !this.topic || this.applying) return;
+    const s = state || collectState();
+    s.__ts = Date.now();
+    this.lastTs = s.__ts;
+    try {
+      this.client.publish(this.topic,
+        JSON.stringify({ t: "state", uid: this.uid, ts: s.__ts, state: s }), { qos: 0 });
+    } catch (e) {}
+  },
+
+  onMessage(payload) {
+    let m;
+    try { m = JSON.parse(payload.toString()); } catch (e) { return; }
+    if (!m || m.t !== "state" || m.uid === this.uid) return;   // 忽略自己发的
+    if (!m.state) return;
+    if (m.ts && m.ts <= this.lastTs) return;                   // 旧数据，忽略
+    this.applyRemote(m.state, m.ts);
+  },
+
+  applyRemote(state, ts) {
+    this.applying = true;
+    try {
+      this.lastTs = ts || Date.now();
+      applyState(state);
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+      renderAllFromRemote();
+      if (typeof showToast === "function") showToast("✓ 已同步好友的改动");
+    } catch (e) { console.warn("应用远端数据失败：", e); }
+    finally { this.applying = false; }
+  }
+};
+
+// 收到远端数据后重刷界面（停留在用户当前查看的那天，不打断浏览）
+function renderAllFromRemote() {
+  try {
+    renderTabs();
+    renderTimeline();
+    renderBanner();
+    if (window.__bmapReady && typeof renderMap === "function") renderMap();
+  } catch (e) { console.warn("远端数据重渲染失败：", e); }
+}
+
+// 生成带房间号的分享链接
+function shareTrip() {
+  const url = location.href;   // initRoom 已把 ?room= 写进地址栏
+  const text = "西安 5 日行程（我们一起编辑）：" + url;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => showToast("✓ 链接已复制，发给朋友即可协同"),
+      () => fallbackCopy(text)
+    );
+  } else {
+    fallbackCopy(text);
+  }
 }
 
 /* ============================================================
@@ -2590,6 +2775,16 @@ function start() {
   // 异步加载百度地图：加载完成后由 window.bmapReady 回调触发 initMap / renderMap
   // （不再需要轮询等待，也不依赖 document.write）
   safeCall("loadBaiduMap", loadBaiduMap);
+
+  // 启动多人实时同步（连不上中继也不影响本地使用，静默降级）
+  setTimeout(function () {
+    try {
+      TripSync.connect().then(function (ok) {
+        const btn = document.getElementById("share-btn");
+        if (btn && ok) btn.classList.add("sync-live");
+      });
+    } catch (e) { console.warn("同步启动失败：", e); }
+  }, 120);
 
   // 移动端：渲染后把当前激活的 Tab 滚到视野中央
   setTimeout(() => safeCall("scrollActiveTabIntoView", scrollActiveTabIntoView), 50);

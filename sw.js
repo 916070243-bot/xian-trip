@@ -3,7 +3,7 @@
    - 有缓存 → 立刻返回（服务器挂了也能开），同时后台静默更新
    - 没缓存 → 走网络（首次访问必须联网一次）
 */
-const CACHE = "xian-trip-v6";
+const CACHE = "xian-trip-v7";
 const ASSETS = [
   "./",
   "./index.html",
