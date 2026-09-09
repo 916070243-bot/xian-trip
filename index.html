@@ -18,7 +18,7 @@
 
 <!-- 百度地图 JSAPI GL：把 BAIDU_KEY 占位符替换为你的 Key 即可显示底图。`defer` 关键 —— 没这个的话，AK 是占位符时服务端会挂着不返回，inline script 全部不执行。
   每个 POI 气泡里带"打开百度地图 / 打车"按钮，会调起手机百度地图 APP。 -->
-<script defer src="https://api.map.baidu.com/api?v=3.0&type=webgl&ak=YOUR_BAIDU_KEY"></script>
+<script defer src="https://api.map.baidu.com/api?v=3.0&type=webgl&ak=htmfjskCi2Z35XuInGhiPCKufDskdJ0W"></script>
 
 <style>
 /* ==================== 全局变量与基础样式 ==================== */
@@ -1085,9 +1085,14 @@ html, body {
     </div>
     <div class="map-empty" id="map-empty">
       <strong>⚠️ 百度地图未加载</strong>
-      <div>把上方 <code>&lt;script src="...api?ak=..."&gt;</code> 中的 <code>YOUR_BAIDU_KEY</code> 替换为你的百度地图 AK。</div>
-      <div style="margin-top:8px;font-size:12px;">去 <a href="https://lbsyun.baidu.com/" target="_blank" style="color:#c0392b;">lbsyun.baidu.com</a> 申请（控制台 → 应用 → JSAPI · 浏览器端），个人可免费申请。</div>
-      <div style="margin-top:10px;font-size:12px;color:#16a34a;">💡 没 AK 也不影响行程查看：每张卡片都有「📱手机地图 / 🚗打车 / 🌐网页版」按钮可直接跳转。</div>
+      <div>常见原因（按顺序排查）：</div>
+      <div style="margin-top:6px;font-size:12px;line-height:1.7;">
+        1. 应用类型没选「<b>浏览器端</b>」<br>
+        2. Referer 白名单没填本站域名 <code>916070243-bot.github.io</code>（或 <code>*</code>）<br>
+        3. 当天免费调用配额已用完<br>
+        4. 手机网络无法访问 <code>api.map.baidu.com</code>
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:#16a34a;">💡 不影响行程查看：每张卡片都有「📱手机地图 / 🚗打车 / 🌐网页版」按钮可直接跳转。</div>
     </div>
   </section>
 
@@ -2286,44 +2291,54 @@ function setHotelMiniMarker(pt, gcjLat, gcjLng) {
   hotelMiniMap.addOverlay(hotelMiniMarker);
 }
 
-// 搜索地址：调腾讯地图 WebService Geocoder
-async function searchHotelAddress() {
+// 搜索地址：用百度 JSAPI 自带的 Geocoder
+// 说明：浏览器端 AK 不能调服务端 Web 服务 API（会报 status=240「APP 服务被禁用」），
+// 但 BMapGL.Geocoder 属于 JSAPI 的一部分，浏览器端 AK 可直接用，无需再申请服务端 AK。
+function searchHotelAddress() {
   const name = $("#hotel-name-input").value.trim();
   const addr = $("#hotel-address-input").value.trim();
   if (!name && !addr) { alert("请先填写酒店名称或详细地址"); return; }
 
-  const key = getTMapKey();
-  if (!key || key === "YOUR_BAIDU_KEY") {
-    alert("⚠️ 百度地图 AK 还没填，无法调用精确匹配接口。\n\n请直接在地图上点击选择位置。");
+  if (typeof BMapGL === "undefined" || !BMapGL.Geocoder) {
+    alert("⚠️ 百度地图还没加载好，请稍等几秒再试。\n\n或直接在下方地图上点击选择位置。");
     return;
   }
 
-  // 优先用酒店名 + 地址拼成完整关键词（百度地理编码建议带城市名）
-  const keyword = ([name, addr, "西安市"].filter(Boolean).join(" "));
-  const url = `https://api.map.baidu.com/geocoding/v3/?address=${encodeURIComponent(keyword)}&output=json&ak=${encodeURIComponent(key)}`;
+  // 酒店名 + 地址拼成完整关键词，城市限定为西安
+  const keyword = [name, addr].filter(Boolean).join(" ");
   const btn = document.querySelector(".hotel-search-btn");
   const oldText = btn.textContent;
   btn.textContent = "查询中…";
   btn.disabled = true;
+
+  let settled = false;
+  const finish = () => { if (!settled) { settled = true; btn.textContent = oldText; btn.disabled = false; } };
+
+  // 保险：8 秒没回调就提示，避免按钮一直卡在「查询中」
+  const timer = setTimeout(() => {
+    finish();
+    alert("查询超时，请检查网络后重试，或直接在地图上点选位置。");
+  }, 8000);
+
   try {
-    const resp = await fetch(url);
-    const data = await resp.json();
-    if (data.status === 0 && data.result && data.result.location) {
-      const loc = data.result.location;
-      // 百度返回的是 BD09，存到 TRIP 时转回 GCJ-02（保持数据统一）
-      const g = bd2gcj(loc.lng, loc.lat);
-      hotelMiniSelectedPos = { lat: g.lat, lng: g.lng };
-      initHotelMiniMap(g.lat, g.lng);
-      $("#hotel-coord-display").textContent = `${g.lat.toFixed(4)}, ${g.lng.toFixed(4)}`;
-    } else {
-      alert(`未找到精确地址 (status=${data.status})\n${data.message || ""}\n\n试试更换关键词、或直接在地图上点选`);
-    }
+    new BMapGL.Geocoder().getPoint(keyword, function (point) {
+      clearTimeout(timer);
+      finish();
+      if (point) {
+        // 百度返回 BD09，转回 GCJ-02 保持数据统一
+        const g = bd2gcj(point.lng, point.lat);
+        hotelMiniSelectedPos = { lat: g.lat, lng: g.lng };
+        initHotelMiniMap(g.lat, g.lng);
+        $("#hotel-coord-display").textContent = `${g.lat.toFixed(4)}, ${g.lng.toFixed(4)}`;
+      } else {
+        alert("未找到该地址\n\n试试只填酒店名、换个说法，或直接在地图上点选位置。");
+      }
+    }, "西安市");
   } catch (e) {
-    alert("网络异常，请重试");
+    clearTimeout(timer);
+    finish();
+    alert("查询出错，请重试，或直接在地图上点选位置。");
     console.error(e);
-  } finally {
-    btn.textContent = oldText;
-    btn.disabled = false;
   }
 }
 
