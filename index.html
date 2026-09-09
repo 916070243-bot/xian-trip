@@ -1,0 +1,2593 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+<title>西安 5 日深度游 · 行程规划</title>
+<meta name="theme-color" content="#c43c2f" />
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="西安行程" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="format-detection" content="telephone=no" />
+<!-- 版本号 v=20260909b —— 修改后请同步更新，强制浏览器/WebView 加载最新版本 -->
+
+<!-- 百度地图 JSAPI GL：把 BAIDU_KEY 占位符替换为你的 Key 即可显示底图。`defer` 关键 —— 没这个的话，AK 是占位符时服务端会挂着不返回，inline script 全部不执行。
+  每个 POI 气泡里带"打开百度地图 / 打车"按钮，会调起手机百度地图 APP。 -->
+<script defer src="https://api.map.baidu.com/api?v=3.0&type=webgl&ak=YOUR_BAIDU_KEY"></script>
+
+<style>
+/* ==================== 全局变量与基础样式 ==================== */
+:root {
+  /* 浅色主题（与 IDE 风格一致） */
+  --bg-page:        #f6f5f1;   /* 米白底色 */
+  --bg-card:        #ffffff;
+  --bg-banner:      linear-gradient(135deg, #8b1f1f 0%, #c0392b 50%, #d35400 100%);
+  --text-primary:   #2c2a28;
+  --text-secondary: #6b6259;
+  --text-muted:     #9c948a;
+  --border:         #ece8e0;
+  --border-strong:  #d8d1c4;
+  --gold:           #d4af37;
+  --shadow-soft:    0 2px 10px rgba(60, 40, 20, 0.06);
+  --shadow-hover:   0 8px 24px rgba(60, 40, 20, 0.12);
+  --radius:         12px;
+
+  /* 4 类 POI 配色 */
+  --att: #2563eb;  --att-bg:   #dbeafe;  --att-soft: #eff6ff;  /* 景点 - 蓝 */
+  --food: #ea580c; --food-bg:  #ffedd5;  --food-soft:#fff7ed; /* 美食 - 橙 */
+  --cul: #7c3aed;  --cul-bg:   #ede9fe;  --cul-soft: #f5f3ff; /* 文化 - 紫 */
+  --shop:#db2777;  --shop-bg:  #fce7f3;  --shop-soft:#fdf2f8;/* 购物 - 粉 */
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Source Han Sans SC", "Noto Sans CJK SC", sans-serif;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.55;
+  min-height: 100vh;
+}
+
+/* ==================== Banner ==================== */
+.banner {
+  position: relative;
+  background: var(--bg-banner);
+  color: #fff;
+  padding: 36px 32px 32px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(139, 31, 31, 0.15);
+}
+.banner::before {
+  content: "";
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse at top right, rgba(255,255,255,0.12), transparent 50%),
+    radial-gradient(ellipse at bottom left, rgba(0,0,0,0.18), transparent 60%);
+  pointer-events: none;
+}
+.banner-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr minmax(360px, 1.4fr) 1fr;
+  align-items: center;
+  gap: 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.banner-spacer { /* 左留白，仅用于占位，居中标题更清晰 */ }
+
+.banner-center { text-align: center; }
+.banner-title {
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  margin: 0 0 8px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+.banner-subtitle {
+  font-size: 14px;
+  letter-spacing: 8px;
+  opacity: 0.85;
+  margin: 0 0 6px;
+}
+.banner-dates {
+  display: inline-block;
+  padding: 4px 14px;
+  border: 1px solid rgba(255,255,255,0.5);
+  border-radius: 999px;
+  font-size: 13px;
+  letter-spacing: 2px;
+  background: rgba(0,0,0,0.12);
+}
+.banner-tags { margin-top: 14px; display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.banner-tag {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+/* 右侧统计块 */
+.banner-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.stat {
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 10px;
+  padding: 12px 14px;
+  backdrop-filter: blur(6px);
+}
+.stat-label {
+  font-size: 11px;
+  letter-spacing: 2px;
+  opacity: 0.85;
+  margin-bottom: 4px;
+}
+.stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.stat-sub { font-size: 11px; opacity: 0.75; margin-top: 2px; }
+
+/* 预算条 */
+.stat-budget {
+  grid-column: span 2;
+  background: rgba(0,0,0,0.18);
+}
+.budget-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 6px;
+}
+.budget-row .num { font-size: 22px; font-weight: 700; }
+.budget-bar {
+  height: 6px; background: rgba(255,255,255,0.15); border-radius: 3px; overflow: hidden;
+}
+.budget-bar > i {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, #fde68a, #f97316);
+  width: 0%; transition: width 0.4s ease;
+}
+.budget-edit-btn {
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.45);
+  color: #fff;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 14px;
+  cursor: pointer;
+  margin-left: 8px;
+  font-family: inherit;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: rgba(255,255,255,0.25);
+  touch-action: manipulation;
+  position: relative;
+  z-index: 5;
+}
+.budget-edit-btn:hover { background: rgba(255,255,255,0.3); }
+.budget-edit-btn:active { background: rgba(255,255,255,0.4); }
+
+/* 移动端预算按钮加大，更易点 */
+@media (max-width: 768px) {
+  .budget-edit-btn {
+    font-size: 14px;
+    padding: 6px 16px;
+  }
+}
+
+/* ==================== Day Tabs ==================== */
+.day-tabs {
+  display: flex;
+  max-width: 1400px;
+  margin: 24px auto 0;
+  padding: 0 32px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.day-tab {
+  flex: 1 1 0;
+  min-width: 130px;
+  background: #fff;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: inherit;
+  color: var(--text-primary);
+}
+.day-tab:hover { transform: translateY(-2px); box-shadow: var(--shadow-soft); border-color: var(--border-strong); }
+.day-tab.active {
+  background: var(--bg-banner);
+  color: #fff;
+  border-color: var(--bg-banner);
+  box-shadow: 0 6px 20px rgba(139,31,31,0.22);
+}
+.day-tab.active .day-tab-date,
+.day-tab.active .day-tab-title { color: #fff; }
+.day-tab-title { font-size: 16px; font-weight: 700; letter-spacing: 1px; }
+.day-tab-date { font-size: 12px; color: var(--text-secondary); }
+.day-tab-progress {
+  margin-top: 6px;
+  height: 4px;
+  background: rgba(0,0,0,0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.day-tab.active .day-tab-progress { background: rgba(255,255,255,0.25); }
+.day-tab-progress > i {
+  display: block; height: 100%;
+  background: #16a34a;
+  width: 0%;
+  transition: width 0.4s;
+}
+.day-tab.active .day-tab-progress > i { background: #fbbf24; }
+
+/* ==================== Main Grid ==================== */
+.main {
+  max-width: 1400px;
+  margin: 16px auto 32px;
+  padding: 0 32px;
+  display: grid;
+  grid-template-columns: minmax(380px, 1fr) 1.3fr;
+  gap: 16px;
+  align-items: stretch;
+}
+
+/* 左侧时间轴 */
+.timeline-side {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.day-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #fffaf2, #fff);
+}
+.day-header h2 { margin: 0 0 4px; font-size: 18px; }
+.day-header .meta { font-size: 12px; color: var(--text-secondary); }
+.day-header .meta .dot { color: var(--border-strong); margin: 0 6px; }
+
+.day-progress {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.day-progress-bar { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.day-progress-bar > i { display: block; height: 100%; background: linear-gradient(90deg, #f97316, #ea580c); width: 0%; transition: width 0.4s; }
+.day-progress-text { font-size: 12px; color: var(--text-secondary); min-width: 48px; text-align: right; }
+
+/* 时间轴 */
+.timeline {
+  position: relative;
+  padding: 18px 20px 24px;
+  overflow-y: auto;
+  max-height: calc(100vh - 240px);
+  flex: 1;
+}
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 38px; top: 32px; bottom: 32px;
+  width: 2px;
+  background: linear-gradient(to bottom, transparent, var(--border-strong) 12px, var(--border-strong) calc(100% - 12px), transparent);
+}
+
+.t-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 14px;
+  padding: 6px 0 22px;
+  cursor: pointer;
+}
+.t-time {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 14px;
+}
+.t-time-bubble {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--border-strong);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+.t-card.done .t-time-bubble {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
+.t-card.done .t-time-bubble::after {
+  content: "✓";
+  font-size: 14px;
+}
+
+.t-body {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+  border-left: 3px solid var(--border-strong);
+}
+.t-card:hover .t-body {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-hover);
+  transform: translateX(2px);
+}
+.t-card.active .t-body {
+  border-color: var(--gold);
+  box-shadow: 0 4px 16px rgba(212,175,55,0.22);
+  background: linear-gradient(180deg, #fffdf3, #fff);
+}
+
+/* 类别左侧边框色 */
+.t-card.cat-att    .t-body { border-left-color: var(--att); }
+.t-card.cat-food   .t-body { border-left-color: var(--food); }
+.t-card.cat-cul    .t-body { border-left-color: var(--cul); }
+.t-card.cat-shop   .t-body { border-left-color: var(--shop); }
+
+.t-row1 { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; flex-wrap: wrap; }
+.t-title { font-size: 15px; font-weight: 600; margin: 0; }
+.cat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+.cat-badge::before {
+  content: "";
+  width: 6px; height: 6px;
+  border-radius: 50%;
+}
+.cat-att  { background: var(--att-bg);  color: var(--att); }
+.cat-att::before  { background: var(--att); }
+.cat-food { background: var(--food-bg); color: var(--food); }
+.cat-food::before { background: var(--food); }
+.cat-cul  { background: var(--cul-bg);  color: var(--cul); }
+.cat-cul::before  { background: var(--cul); }
+.cat-shop { background: var(--shop-bg); color: var(--shop); }
+.cat-shop::before { background: var(--shop); }
+
+.t-note {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.t-meta {
+  margin-top: 8px;
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.t-meta span::before { content: "· "; }
+
+/* 完成勾选 */
+.t-check {
+  margin-left: auto;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff;
+  transition: all 0.2s;
+}
+.t-check:hover { border-color: #16a34a; }
+.t-card.done .t-check {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
+.t-card.done .t-check::after { content: "✓"; font-size: 13px; }
+
+/* 图例 */
+.legend {
+  display: flex; gap: 14px; flex-wrap: wrap;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  background: #fafaf6;
+  font-size: 12px;
+}
+.legend-item { display: flex; align-items: center; gap: 5px; color: var(--text-secondary); }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+.l-att  { background: var(--att); }
+.l-food { background: var(--food); }
+.l-cul  { background: var(--cul); }
+.l-shop { background: var(--shop); }
+
+/* ==================== 地图区域 ==================== */
+.map-side {
+  position: relative;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+  min-height: calc(100vh - 160px);
+}
+#map { position: absolute; inset: 0; }
+
+.map-overlay {
+  position: absolute;
+  top: 14px; left: 14px;
+  background: rgba(255,255,255,0.95);
+  border-radius: 8px;
+  padding: 8px 12px;
+  box-shadow: var(--shadow-soft);
+  font-size: 12px;
+  z-index: 10;
+  border: 1px solid var(--border);
+}
+.map-overlay strong { color: var(--bg-banner); }
+.map-overlay button {
+  margin-left: 8px;
+  background: var(--bg-page);
+  border: 1px solid var(--border-strong);
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.map-overlay button:hover { background: #fff; }
+
+.map-empty {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column;
+  background: linear-gradient(180deg, #fff 0%, #fafaf6 100%);
+  color: var(--text-secondary);
+  font-size: 13px;
+  z-index: 5;
+  text-align: center;
+  padding: 20px;
+}
+.map-empty strong { color: var(--text-primary); font-size: 15px; margin-bottom: 8px; }
+.map-empty code { background: #fff5f5; padding: 2px 6px; border-radius: 4px; }
+
+/* ==================== 弹窗 ==================== */
+.modal-mask {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: none;
+  align-items: center; justify-content: center;
+  z-index: 100;
+}
+.modal-mask.show { display: flex; }
+.modal {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  width: 90%; max-width: 360px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+}
+.modal h3 { margin: 0 0 12px; font-size: 16px; }
+.modal label { display: block; font-size: 12px; color: var(--text-secondary); margin: 10px 0 4px; }
+.modal input {
+  width: 100%; padding: 8px 10px;
+  border: 1px solid var(--border-strong); border-radius: 6px;
+  font-size: 14px;
+}
+.modal-actions { margin-top: 18px; display: flex; gap: 8px; justify-content: flex-end; }
+.modal-btn {
+  padding: 6px 14px; border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+.modal-btn.primary { background: var(--bg-banner); color: #fff; border-color: var(--bg-banner); }
+
+/* ==================== 酒店弹窗 ==================== */
+.modal-hotel {
+  width: 95%;
+  max-width: 460px;
+  max-height: 92vh;
+  overflow-y: auto;
+}
+.hotel-input-row {
+  display: flex;
+  gap: 8px;
+}
+.hotel-input-row input { flex: 1; }
+.hotel-search-btn {
+  flex: 0 0 auto;
+  background: #f5f5f5;
+  white-space: nowrap;
+  font-size: 13px;
+  padding: 8px 14px;
+}
+.hotel-mini-map-wrap {
+  margin-top: 14px;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--border-strong);
+}
+#hotel-mini-map {
+  width: 100%;
+  height: 240px;
+  background: #efeae0;
+}
+.hotel-mini-tip {
+  position: absolute;
+  bottom: 6px; left: 6px;
+  background: rgba(255,255,255,0.92);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+.hotel-coord {
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #fafaf6;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.hotel-apply-range {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hotel-radio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 4px 0;
+}
+.hotel-radio input { margin: 0; }
+
+/* ==================== 酒店卡片（时间轴顶端） ==================== */
+.hotel-card .t-body {
+  background: linear-gradient(180deg, #fffaeb 0%, #fff 60%);
+  border-left-color: #d4af37 !important;
+}
+.hotel-card .t-time-bubble {
+  background: #fef3c7;
+  border-color: #d4af37;
+  color: #92400e;
+  font-size: 18px;
+}
+.hotel-card .t-title {
+  display: flex; align-items: center; gap: 6px;
+}
+.hotel-tag {
+  display: inline-flex; align-items: center;
+  font-size: 11px; padding: 2px 8px;
+  background: #fef3c7; color: #92400e;
+  border-radius: 4px; font-weight: 500;
+}
+.hotel-edit-mini {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 4px 10px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: rgba(212,175,55,0.25);
+  touch-action: manipulation;
+}
+.hotel-edit-mini:hover { background: #fde68a; }
+.hotel-card.empty .t-body {
+  background: #fafaf6;
+  border-style: dashed;
+}
+.hotel-card.empty .t-time-bubble {
+  background: #fff;
+  border-style: dashed;
+  color: var(--text-muted);
+}
+.hotel-empty-text {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 4px 0 0;
+}
+
+/* ==================== 预算清单 / 支出弹窗 ==================== */
+.modal-budget, .modal-expense {
+  width: 95%;
+  max-width: 420px;
+  max-height: 92vh;
+  overflow-y: auto;
+}
+.budget-btn-group {
+  display: flex;
+  gap: 6px;
+  margin-left: 8px;
+}
+.budget-btn-group .budget-edit-btn { margin-left: 0; }
+.expense-btn {
+  background: rgba(255,255,255,0.28);
+  border-color: rgba(255,255,255,0.55);
+}
+.expense-btn:hover { background: rgba(255,255,255,0.42); }
+
+.budget-cat-list {
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.budget-cat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.budget-cat-row:last-child { border-bottom: none; }
+.budget-cat-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  flex: 0 0 auto;
+}
+.budget-cat-name {
+  font-size: 13px;
+  flex: 0 0 62px;
+  color: var(--text-primary);
+}
+.budget-cat-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font-size: 14px;
+  text-align: right;
+  font-family: inherit;
+}
+.budget-summary {
+  margin-top: 10px;
+  padding: 9px 12px;
+  background: #fafaf6;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.budget-summary.ok { background: #f0fdf4; color: #15803d; }
+.budget-summary.warn { background: #fef2f2; color: #b91c1c; }
+
+.budget-spent-block { margin-top: 14px; }
+.budget-spent-title {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.budget-spent-list { display: flex; flex-direction: column; gap: 6px; }
+.budget-spent-item {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px;
+}
+.budget-spent-item .nm { flex: 0 0 62px; color: var(--text-secondary); }
+.budget-spent-item .bar {
+  flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
+}
+.budget-spent-item .bar > i { display: block; height: 100%; border-radius: 3px; }
+.budget-spent-item .vl {
+  flex: 0 0 auto; font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px; color: var(--text-secondary); min-width: 60px; text-align: right;
+}
+
+/* 支出分类选择 */
+.expense-cat-picker {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.expense-cat-btn {
+  padding: 9px 4px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-primary);
+  transition: all 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.expense-cat-btn:hover { border-color: #c9c2b4; }
+.expense-cat-btn.active {
+  background: #fff7ed;
+  border-color: #ea580c;
+  color: #ea580c;
+  font-weight: 600;
+}
+
+/* 天数选择 */
+.expense-day-picker {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.expense-day-btn {
+  padding: 9px 2px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-primary);
+  transition: all 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.expense-day-btn:hover { border-color: #c9c2b4; }
+.expense-day-btn.active {
+  background: var(--bg-banner);
+  border-color: var(--bg-banner);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* 支出流水 */
+.expense-history {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.expense-history-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: var(--text-primary);
+}
+.expense-day-summary {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.exp-day-cell {
+  text-align: center;
+  padding: 8px 2px;
+  background: #fafaf6;
+  border-radius: 6px;
+  font-size: 11px;
+}
+.exp-day-cell .d { color: var(--text-muted); font-size: 10px; }
+.exp-day-cell .v {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-top: 2px;
+}
+.exp-day-cell.has .v { color: #c0392b; }
+
+.expense-list { display: flex; flex-direction: column; gap: 6px; }
+.expense-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  background: #fafaf6;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.expense-item .cat {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.expense-item .day {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.expense-item .note {
+  flex: 1;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.expense-item .amt {
+  flex: 0 0 auto;
+  font-weight: 700;
+  font-family: ui-monospace, Menlo, monospace;
+}
+.expense-item .del {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  color: #dc2626;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.expense-empty {
+  text-align: center;
+  padding: 16px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* banner 支出汇总小字 */
+.budget-spent-inline {
+  font-size: 11px;
+  opacity: 0.8;
+  margin-top: 2px;
+}
+
+/* 百度地图 InfoWindow 内部样式（百度将 HTML 注入地图 div 内的固定浮层） */
+.bm-info { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; padding: 2px; min-width: 200px; }
+.bm-info-meta { font-size: 11px; color: #999; margin-bottom: 4px; }
+.bm-info-title { font-weight: 700; font-size: 15px; margin: 2px 0 4px; color: #222; }
+.bm-info-addr { font-size: 12px; color: #666; margin-bottom: 10px; }
+.bm-info-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.bm-act {
+  display: inline-block;
+  padding: 5px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  text-decoration: none;
+  border: 1px solid #ddd;
+  color: #333;
+  background: #fff;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1;
+}
+.bm-act-app   { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+.bm-act-taxi  { background: #eff6ff; color: #2563eb; border-color: #dbeafe; }
+.bm-act-web   { background: #f0f9ff; color: #0369a1; border-color: #bae6fd; }
+.bm-act-edit  { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+.bm-act-copy  { background: #fafaf6; color: #4b5563; }
+.bm-act:active { transform: scale(0.97); }
+.bm-info-foot { font-size: 10px; color: #aaa; margin-top: 8px; font-family: ui-monospace, Menlo, monospace; }
+
+/* banner 增加酒店入口 */
+.hotel-shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 10px;
+  padding: 10px 14px;
+  backdrop-filter: blur(6px);
+  margin-top: 10px;
+  font-size: 12px;
+}
+.hotel-shortcut-info {
+  display: flex; flex-direction: column; gap: 2px;
+  min-width: 0;
+}
+.hotel-shortcut-info strong {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hotel-shortcut-info span {
+  font-size: 11px;
+  opacity: 0.75;
+}
+.hotel-shortcut-btn {
+  background: rgba(255,255,255,0.22);
+  border: 1px solid rgba(255,255,255,0.4);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 14px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: rgba(255,255,255,0.3);
+  touch-action: manipulation;
+}
+
+/* ==================== 响应式 ==================== */
+/* 移动端：Tab 横向滚动，每次只露一张 DAY 卡片，左右滑动切换 */
+@media (max-width: 768px) {
+  .day-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    padding: 0 16px;
+    gap: 10px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .day-tabs::-webkit-scrollbar { display: none; }
+  .day-tab {
+    flex: 0 0 82%;
+    min-width: 0;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+  }
+  /* 容器两侧留一点内边距，让首/末张卡能完整 snap 到中间 */
+  .day-tabs::before,
+  .day-tabs::after {
+    content: "";
+    flex: 0 0 9%;
+  }
+}
+
+@media (max-width: 960px) {
+  .banner-grid { grid-template-columns: 1fr; }
+  .banner-stats { margin-top: 18px; }
+  .main { grid-template-columns: 1fr; }
+  .timeline-side { max-height: none; }
+  .timeline { max-height: 500px; }
+  .map-side { min-height: 460px; height: 60vh; }
+}
+</style>
+</head>
+<body>
+
+<!-- ==================== Banner ==================== -->
+<header class="banner">
+  <div class="banner-grid">
+
+    <div class="banner-spacer"></div>
+
+    <div class="banner-center">
+      <h1 class="banner-title">🏯 西安 5 日深度游</h1>
+      <p class="banner-subtitle">古都 · 盛唐 · 秦风汉韵</p>
+      <span class="banner-dates">10.02 · — · 10.06 · 2026</span>
+      <div class="banner-tags">
+        <span class="banner-tag">大唐不夜城</span>
+        <span class="banner-tag">兵马俑</span>
+        <span class="banner-tag">长安古韵</span>
+        <span class="banner-tag">汉服旅拍</span>
+      </div>
+    </div>
+
+    <div class="banner-stats">
+      <div class="stat">
+        <div class="stat-label">总 天 数</div>
+        <div class="stat-value">5 天</div>
+        <div class="stat-sub">10.02 — 10.06</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">当 前 第 几 天</div>
+        <div class="stat-value" id="stat-current-day">Day 1</div>
+        <div class="stat-sub" id="stat-current-date">10月2日 · 抵达日</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">今 日 完 成</div>
+        <div class="stat-value"><span id="stat-day-done">0</span> / <span id="stat-day-total">0</span></div>
+        <div class="stat-sub" id="stat-day-percent">0% · 加油</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">总 进 度</div>
+        <div class="stat-value"><span id="stat-trip-done">0</span> / <span id="stat-trip-total">0</span></div>
+        <div class="stat-sub">全部行程 POI</div>
+      </div>
+      <div class="stat stat-budget">
+        <div class="budget-row">
+          <span class="stat-label">总 预 算</span>
+          <div class="budget-btn-group">
+            <button class="budget-edit-btn" id="budget-edit-btn" type="button" onclick="openBudgetModal()">预算清单</button>
+            <button class="budget-edit-btn expense-btn" id="expense-edit-btn" type="button" onclick="openExpenseModal()">＋ 记支出</button>
+          </div>
+        </div>
+        <div class="budget-row">
+          <span class="num">¥<span id="stat-budget-spent">0</span></span>
+          <span class="num" style="opacity:.8;">/ ¥<span id="stat-budget-total">6000</span></span>
+        </div>
+        <div class="budget-bar"><i id="stat-budget-bar"></i></div>
+        <div class="stat-sub" style="margin-top:6px;" id="stat-budget-percent">已消耗 0% · 剩余 ¥6000</div>
+      </div>
+      <div class="stat stat-hotel" style="grid-column: span 2; cursor: pointer;" onclick="openHotelModal()">
+        <div class="budget-row">
+          <span class="stat-label">🏨 今 晚 入 住</span>
+          <button class="budget-edit-btn" id="hotel-banner-btn" type="button" onclick="event.stopPropagation(); openHotelModal();">管理</button>
+        </div>
+        <div style="font-size:15px;font-weight:700;line-height:1.2;" id="stat-hotel-name">未设置酒店</div>
+        <div class="stat-sub" id="stat-hotel-info">点击右上"管理"设置 Day 1 酒店</div>
+      </div>
+    </div>
+
+  </div>
+</header>
+
+<!-- ==================== Day Tabs ==================== -->
+<nav class="day-tabs" id="day-tabs"></nav>
+
+<!-- ==================== Main ==================== -->
+<main class="main">
+
+  <!-- 左侧时间轴 -->
+  <section class="timeline-side">
+    <div class="day-header">
+      <h2 id="day-header-title">Day 1 · 抵达 · 汉服旅拍</h2>
+      <div class="meta">
+        <span id="day-header-date">10月2日</span>
+        <span class="dot">·</span>
+        <span id="day-header-count">0 个 POI</span>
+        <span class="dot">·</span>
+        <span>点击卡片地图飞过去</span>
+      </div>
+      <div class="day-progress">
+        <div class="day-progress-bar"><i id="day-progress-bar"></i></div>
+        <div class="day-progress-text" id="day-progress-text">0/0</div>
+      </div>
+    </div>
+
+    <div class="timeline" id="timeline"></div>
+
+    <div class="legend">
+      <div class="legend-item"><span class="legend-dot l-att"></span>景点</div>
+      <div class="legend-item"><span class="legend-dot l-food"></span>美食</div>
+      <div class="legend-item"><span class="legend-dot l-cul"></span>文化</div>
+      <div class="legend-item"><span class="legend-dot l-shop"></span>购物</div>
+      <div class="legend-item" style="margin-left:auto;color:var(--text-muted);">✓ 勾选已完成</div>
+    </div>
+  </section>
+
+  <!-- 右侧地图 -->
+  <section class="map-side">
+    <div id="map"></div>
+    <div class="map-overlay">
+      <strong id="map-overlay-day">Day 1</strong> 共 <strong id="map-overlay-count">0</strong> 个点
+      <button id="fit-btn">📍 显示全部</button>
+      <button id="toggle-route-btn">🛣 路线</button>
+    </div>
+    <div class="map-empty" id="map-empty">
+      <strong>⚠️ 百度地图未加载</strong>
+      <div>把上方 <code>&lt;script src="...api?ak=..."&gt;</code> 中的 <code>YOUR_BAIDU_KEY</code> 替换为你的百度地图 AK。</div>
+      <div style="margin-top:8px;font-size:12px;">没有 AK？去 <a href="https://lbsyun.baidu.com/" target="_blank" style="color:#c0392b;">lbsyun.baidu.com</a> 申请（控制台 → 应用 → JSAPI · 浏览器端），个人可免费申请。<br><br><b>即使没 AK 也不影响核心功能</b>：下方会自动切成 POI 列表 + 一键跳转手机百度地图 / 打车。</div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ==================== 预算清单弹窗 ==================== -->
+<div class="modal-mask" id="budget-modal">
+  <div class="modal modal-budget">
+    <h3>💰 预算清单</h3>
+
+    <label>总预算（¥）</label>
+    <input type="number" id="budget-total-input" placeholder="例如：6000" oninput="updateBudgetSummary()" />
+
+    <label style="margin-top:14px;">分类预算（酒店 / 交通 / 吃饭 / 购物）</label>
+    <div class="budget-cat-list">
+      <div class="budget-cat-row" data-cat="hotel">
+        <span class="budget-cat-dot" style="background:#d4af37;"></span>
+        <span class="budget-cat-name">🏨 酒店</span>
+        <input type="number" class="budget-cat-input" id="budget-cat-hotel" oninput="updateBudgetSummary()" />
+      </div>
+      <div class="budget-cat-row" data-cat="transport">
+        <span class="budget-cat-dot" style="background:#2563eb;"></span>
+        <span class="budget-cat-name">🚗 交通</span>
+        <input type="number" class="budget-cat-input" id="budget-cat-transport" oninput="updateBudgetSummary()" />
+      </div>
+      <div class="budget-cat-row" data-cat="food">
+        <span class="budget-cat-dot" style="background:#ea580c;"></span>
+        <span class="budget-cat-name">🍜 吃饭</span>
+        <input type="number" class="budget-cat-input" id="budget-cat-food" oninput="updateBudgetSummary()" />
+      </div>
+      <div class="budget-cat-row" data-cat="shopping">
+        <span class="budget-cat-dot" style="background:#db2777;"></span>
+        <span class="budget-cat-name">🛍 购物</span>
+        <input type="number" class="budget-cat-input" id="budget-cat-shopping" oninput="updateBudgetSummary()" />
+      </div>
+    </div>
+
+    <div class="budget-summary" id="budget-summary">
+      分类合计 — · 与总预算差额 —
+    </div>
+
+    <!-- 已支出（按分类） -->
+    <div class="budget-spent-block">
+      <div class="budget-spent-title">已支出（按分类）</div>
+      <div id="budget-spent-list" class="budget-spent-list"></div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="modal-btn" onclick="closeBudgetModal()">取消</button>
+      <button class="modal-btn" onclick="autoFillBudget()">按总预算平分</button>
+      <button class="modal-btn primary" onclick="saveBudget()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 记一笔支出弹窗 ==================== -->
+<div class="modal-mask" id="expense-modal">
+  <div class="modal modal-expense">
+    <h3>💸 记一笔支出</h3>
+
+    <label>支出分类</label>
+    <div class="expense-cat-picker" id="expense-cat-picker">
+      <button type="button" class="expense-cat-btn" data-cat="hotel" onclick="pickExpenseCat('hotel')">🏨 酒店</button>
+      <button type="button" class="expense-cat-btn" data-cat="transport" onclick="pickExpenseCat('transport')">🚗 交通</button>
+      <button type="button" class="expense-cat-btn" data-cat="food" onclick="pickExpenseCat('food')">🍜 吃饭</button>
+      <button type="button" class="expense-cat-btn" data-cat="shopping" onclick="pickExpenseCat('shopping')">🛍 购物</button>
+    </div>
+
+    <label>金额（¥）</label>
+    <input type="number" id="expense-amount" placeholder="例如：268" />
+
+    <label>属于哪一天</label>
+    <div class="expense-day-picker" id="expense-day-picker"></div>
+
+    <label>备注（可选）</label>
+    <input type="text" id="expense-note" placeholder="例如：兵马俑门票 + 讲解" />
+
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="modal-btn" onclick="closeExpenseModal()">取消</button>
+      <button class="modal-btn primary" onclick="saveExpense()">保存这笔</button>
+    </div>
+
+    <!-- 支出流水 -->
+    <div class="expense-history">
+      <div class="expense-history-title">📋 支出流水 · 每日汇总</div>
+      <div id="expense-day-summary" class="expense-day-summary"></div>
+      <div id="expense-list" class="expense-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 酒店设置弹窗 ==================== -->
+<div class="modal-mask" id="hotel-modal">
+  <div class="modal modal-hotel">
+    <h3 id="hotel-modal-title">🏨 设置酒店</h3>
+
+    <label>酒店名称</label>
+    <input type="text" id="hotel-name-input" placeholder="例如：锦江都城西安钟楼店" />
+
+    <label>详细地址（用于腾讯地图精确匹配）</label>
+    <div class="hotel-input-row">
+      <input type="text" id="hotel-address-input" placeholder="例如：西安市莲湖区西大街88号" />
+      <button class="modal-btn hotel-search-btn" onclick="searchHotelAddress()">🔍 查询</button>
+    </div>
+
+    <div class="hotel-mini-map-wrap">
+      <div id="hotel-mini-map"></div>
+      <div class="hotel-mini-tip">💡 点击地图任意位置可调整酒店坐标</div>
+    </div>
+
+    <div class="hotel-coord">
+      <span>📍 当前坐标</span>
+      <span id="hotel-coord-display">— , —</span>
+    </div>
+
+    <label style="margin-top:14px;">应用到</label>
+    <div class="hotel-apply-range">
+      <label class="hotel-radio"><input type="radio" name="hotel-apply" value="only" checked /> 仅今晚（Day <span id="hotel-target-day">1</span>）</label>
+      <label class="hotel-radio"><input type="radio" name="hotel-apply" value="forward" /> 今晚起到行程结束</label>
+      <label class="hotel-radio"><input type="radio" name="hotel-apply" value="all" /> 全部天数（覆盖）</label>
+    </div>
+
+    <div class="modal-actions">
+      <button class="modal-btn" onclick="closeHotelModal()">取消</button>
+      <button class="modal-btn primary" onclick="saveHotel()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   行程数据（西安 5 日深度游 · 10.02 — 10.06 · 2026）
+   4 类 POI：景点 att / 美食 food / 文化 cul / 购物 shop
+   坐标采用 GCJ-02 坐标系
+============================================================ */
+const TRIP = {
+  title: "西安 5 日深度游",
+  totalDays: 5,
+  currentDay: 1,         // 默认从 Day 1 开始；会在 start() 里被系统时间覆盖
+  // 行程起止日期（用于根据今天日期自动判断"当前第几天"）
+  startDate: "2026-10-02",
+  endDate:   "2026-10-06",
+  budgets: {
+    total: 6000,         // 总预算
+    // 分类预算：酒店 / 交通 / 吃饭 / 购物
+    categories: {
+      hotel: 1500,
+      transport: 1800,
+      food: 1200,
+      shopping: 1500
+    }
+  },
+  // 支出流水：{ id, day, category, amount, note, ts }
+  // category ∈ hotel | transport | food | shopping
+  expenses: [],
+  // 酒店：按天存放，每晚酒店可独立设置
+  // 默认全部落在钟楼附近（坐标：108.9424, 34.2192），用户设置后会按选中范围自动覆盖
+  defaultHotel: { name: "", address: "", lng: 108.9424, lat: 34.2192 },
+  hotels: [
+    { day: 1, name: "", address: "", lng: 108.9424, lat: 34.2192 },
+    { day: 2, name: "", address: "", lng: 108.9424, lat: 34.2192 },
+    { day: 3, name: "", address: "", lng: 108.9424, lat: 34.2192 },
+    { day: 4, name: "", address: "", lng: 108.9424, lat: 34.2192 },
+    { day: 5, name: "", address: "", lng: 108.9424, lat: 34.2192 }
+  ],
+  days: [
+    {
+      n: 1, date: "10月2日", theme: "抵达 · 汉服旅拍",
+      items: [
+        { t: "15:30", title: "抵达西安咸阳国际机场", note: "T5 航站楼到达，提取行李后取机场大巴/打车前往市区，约 50 — 80 分钟。", cat: "att", location: { name: "西安咸阳国际机场 T5", lng: 108.8725, lat: 34.5261 } },
+        { t: "16:30", title: "出发前往酒店",        note: "网约车 / 机场大巴可选。路上可远眺秦岭北麓。", cat: "att", hotelRef: true, location: { name: "入住酒店", lng: 108.9424, lat: 34.2192 } },
+        { t: "17:30", title: "酒店办理入住 · 休整",   note: "放行李、补给水、查地铁次日游览动线。", cat: "att", hotelRef: true, location: { name: "入住酒店", lng: 108.9424, lat: 34.2192 } },
+        { t: "18:00", title: "云想翼萋汉服馆 · 化妆",  note: "大唐芙蓉园店，地铁 4 号线大唐芙蓉园站 A 口出步行约 5 分钟。提前预约化妆时段。", cat: "cul", location: { name: "云想翼萋汉服馆(大唐芙蓉园店)", lng: 108.9720, lat: 34.2140 } },
+        { t: "19:00", title: "大唐芙蓉园旅拍",        note: "灯光夜景 + 唐风建筑，建议拍照 2 小时。重点：紫云楼、桥廊、湖面。", cat: "att", location: { name: "大唐芙蓉园", lng: 108.9720, lat: 34.2140 } }
+      ]
+    },
+    {
+      n: 2, date: "10月3日", theme: "东线 · 秦始皇兵马俑 + 华清宫",
+      items: [
+        { t: "08:00", title: "出发 · 东线一日游",     note: "建议打车 / 拼车前往，临潼区距市区约 50 公里。也可在火车站东广场乘游 5 路。从酒店出发。", cat: "att", hotelRef: true, location: { name: "酒店出发", lng: 108.9424, lat: 34.2192 } },
+        { t: "11:00", title: "秦始皇兵马俑博物馆",   note: "建议提前 1 天公众号预约 + 团购讲解(¥200)。必看：一号坑、二号坑、铜车马展厅。", cat: "att", location: { name: "秦始皇兵马俑博物馆", lng: 109.2649, lat: 34.3853 } },
+        { t: "14:00", title: "丽山园 · 铜车马",        note: "秦始皇帝陵园，参观铜车马博物馆 + 铜车马实物。", cat: "cul", location: { name: "丽山园(秦始皇帝陵)", lng: 109.2795, lat: 34.3853 } },
+        { t: "16:00", title: "华清宫 + 骊山",          note: "泰迪省力游览路线：先坐索道上骊山，再游览华清宫看《长恨歌》演出(提前订票)。", cat: "cul", location: { name: "华清宫", lng: 109.2156, lat: 34.3625 } },
+        { t: "19:30", title: "返程回市区 · 夜归酒店",   note: "晚高峰避开，可先在临潼用餐后再回酒店。", cat: "att", hotelRef: true, location: { name: "返程(回酒店)", lng: 108.9424, lat: 34.2192 } }
+      ]
+    },
+    {
+      n: 3, date: "10月4日", theme: "市内文化 · 你的生日",
+      items: [
+        { t: "10:00", title: "大唐不夜城 · 妆造体验",  note: "在大唐不夜城附近汉服馆做唐妆，做好直接开逛。", cat: "cul", location: { name: "大唐不夜城", lng: 108.9724, lat: 34.2089 } },
+        { t: "12:30", title: "大慈恩寺 · 大雁塔",      note: "玄奘译经地，登塔俯瞰大雁塔北广场音乐喷泉(亚洲最大)。", cat: "cul", location: { name: "大慈恩寺 / 大雁塔", lng: 108.9645, lat: 34.2190 } },
+        { t: "13:30", title: "大悦城观景台打卡",       note: "大悦城 4 楼露天平台免费观景，正对大雁塔。顺路吃午饭。", cat: "shop", location: { name: "大悦城(西安)", lng: 108.9530, lat: 34.2160 } },
+        { t: "15:40", title: "西安城墙(永宁门)",        note: "建议租自行车骑行 13.7 公里，约 2 小时。黄昏时在城墙上拍照最美。", cat: "att", location: { name: "西安城墙 · 永宁门", lng: 108.9453, lat: 34.2056 } },
+        { t: "18:00", title: "🎂 过生日 · 长安味道",  note: "提前预约一家有格调的陕菜 / 西餐厅 —— 推荐陕菜 / 同盛祥 · 钟楼店。", cat: "food", location: { name: "生日餐厅(钟楼附近)", lng: 108.9424, lat: 34.2192 } },
+        { t: "20:00", title: "钟楼 · 鼓楼夜景拍摄",   note: "夜景灯光秀 + 周边回民街夜市小吃。先拍钟鼓楼合照，再逛回坊。", cat: "cul", location: { name: "钟楼 / 鼓楼", lng: 108.9422, lat: 34.2202 } }
+      ]
+    },
+    {
+      n: 4, date: "10月5日", theme: "秦岭 + 老城慢游",
+      items: [
+        { t: "09:00", title: "出发 · 秦岭四宝科学公园",note: "建议打车 / 拼车，从酒店出发，距市区约 60 公里。园区在大熊猫秦岭亚种栖息地。", cat: "att", hotelRef: true, location: { name: "酒店出发", lng: 108.9424, lat: 34.2192 } },
+        { t: "11:30", title: "秦岭四宝科学公园 · 园区游览", note: "看棕色大熊猫「七仔」、金丝猴、羚牛、朱鹮。建议游玩 4 — 5 小时，含午餐。", cat: "att", location: { name: "秦岭四宝科学公园", lng: 108.8125, lat: 33.9910 } },
+        { t: "18:30", title: "洒金桥 · 广仁寺打卡",     note: "洒金桥是本地小吃街(马二酸汤水饺、刘老虎肉丸糊)。广仁寺是西安唯一藏传佛教格鲁派寺院。", cat: "food", location: { name: "洒金桥 / 广仁寺", lng: 108.9386, lat: 34.2516 } },
+        { t: "19:30", title: "大皮院 · 美食晚餐",      note: "老白家羊肉泡馍、定家小酥肉、盛志望麻酱酿皮 —— 大皮院夜市走一遍。", cat: "food", location: { name: "大皮院", lng: 108.9370, lat: 34.2396 } },
+        { t: "20:30", title: "永兴坊 / 书院门夜游",    note: "看情况 2 选 1：永兴坊看关中民俗小吃集锦 / 书院门逛碑林文化街。", cat: "cul", location: { name: "永兴坊 / 书院门", lng: 108.9413, lat: 34.2294 } }
+      ]
+    },
+    {
+      n: 5, date: "10月6日", theme: "博物馆 · 返程",
+      items: [
+        { t: "10:00", title: "陕西历史博物馆",         note: "免费但需提前 1 — 7 天预约(陕历博公众号)，何家村窖藏、鎏金舞马衔杯纹银壶是镇馆之宝。建议租电子讲解。", cat: "cul", location: { name: "陕西历史博物馆", lng: 108.9528, lat: 34.2178 } },
+        { t: "12:30", title: "附近午餐休整",          note: "博物馆南门小巷有不少陕菜 / 茶餐厅，回民街也在 1.5 公里内。", cat: "food", location: { name: "博物馆附近餐厅", lng: 108.9528, lat: 34.2178 } },
+        { t: "13:30", title: "前往西安咸阳国际机场",  note: "赶飞机预留 2 小时(安检+步行+摆渡)。打车 / 机场大巴均可。", cat: "att", location: { name: "西安咸阳国际机场", lng: 108.8725, lat: 34.5261 } }
+      ]
+    }
+  ]
+};
+
+/* ============================================================
+   持久化：已完成项 / 预算
+============================================================ */
+const STORAGE_KEY = "xian-trip-v1";
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    if (typeof state.currentDay === "number") TRIP.currentDay = state.currentDay;
+    if (state.budgets) {
+      // 兼容旧结构：老版本只有 total/spent
+      if (typeof state.budgets.total === "number") TRIP.budgets.total = state.budgets.total;
+      if (state.budgets.categories) {
+        TRIP.budgets.categories = Object.assign(TRIP.budgets.categories || {}, state.budgets.categories);
+      }
+    }
+    if (Array.isArray(state.expenses)) TRIP.expenses = state.expenses;
+    if (Array.isArray(state.hotels) && state.hotels.length) {
+      // 按 day 对齐合并（兼容新旧版本）
+      state.hotels.forEach(saved => {
+        if (!saved || typeof saved.day !== "number") return;
+        const cur = TRIP.hotels.find(x => x.day === saved.day);
+        if (cur) Object.assign(cur, saved);
+      });
+    }
+    if (state.done) {
+      TRIP.days.forEach((d, di) => {
+        d.items.forEach((it, ii) => {
+          if (state.done[di] && state.done[di][ii]) it.done = true;
+        });
+      });
+    }
+  } catch (e) {}
+}
+
+function saveState() {
+  const done = TRIP.days.map(d => d.items.map(it => !!it.done));
+  const state = {
+    currentDay: TRIP.currentDay,
+    budgets: TRIP.budgets,
+    expenses: TRIP.expenses,
+    hotels: TRIP.hotels,
+    done
+  };
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+/* ============================================================
+   渲染：天数 Tab / 时间轴 / 地图
+============================================================ */
+let state = {
+  activeDay: 1,
+  activeCardIdx: -1,
+  mapReady: false
+};
+
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
+
+function renderTabs() {
+  const wrap = $("#day-tabs");
+  wrap.innerHTML = "";
+  const totalDone = TRIP.days.reduce((s, d) => s + d.items.filter(it => it.done).length, 0);
+  const totalAll = TRIP.days.reduce((s, d) => s + d.items.length, 0);
+
+  TRIP.days.forEach((d, idx) => {
+    const done = d.items.filter(it => it.done).length;
+    const total = d.items.length;
+    const pct = total ? Math.round(done * 100 / total) : 0;
+    const isActive = d.n === state.activeDay;
+    const btn = document.createElement("button");
+    btn.className = "day-tab" + (isActive ? " active" : "");
+    btn.innerHTML = `
+      <span class="day-tab-title">DAY ${d.n}</span>
+      <span class="day-tab-date">${d.date} · ${d.theme}</span>
+      <div class="day-tab-progress"><i style="width:${pct}%"></i></div>
+    `;
+    btn.addEventListener("click", () => switchDay(d.n));
+    wrap.appendChild(btn);
+  });
+}
+
+function renderTimeline() {
+  const day = currentDayData();
+  $("#day-header-title").textContent = `Day ${day.n} · ${day.theme}`;
+  $("#day-header-date").textContent = day.date + " (今天)" ;
+  $("#day-header-count").textContent = `${day.items.length} 个 POI + 1 酒店`;
+
+  const t = $("#timeline");
+  t.innerHTML = "";
+
+  // 1) 先渲染酒店卡片（顶端）
+  const hotel = getHotelForDay(day.n);
+  const hotelEmpty = !hotel || !hotel.name;
+  const hotelCard = document.createElement("div");
+  hotelCard.className = "t-card hotel-card" + (hotelEmpty ? " empty" : "");
+  hotelCard.dataset.hotelCard = "1";
+  hotelCard.innerHTML = `
+    <div class="t-time"><div class="t-time-bubble">🏨</div></div>
+    <div class="t-body">
+      <div class="t-row1">
+        <h3 class="t-title">
+          今晚住宿 · Day ${day.n}
+          <span class="hotel-tag">${hotelEmpty ? "未设置" : "已确认"}</span>
+        </h3>
+        <button class="hotel-edit-mini" type="button" onclick="openHotelModal(${day.n})">${hotelEmpty ? "＋ 设置" : "✏️ 修改"}</button>
+      </div>
+      ${hotelEmpty
+        ? `<p class="hotel-empty-text">点击右上角"＋ 设置"录入酒店，地图自动匹配位置。</p>`
+        : `<div class="t-meta">
+            <span>📍 ${hotel.address || "(未填地址)"}</span>
+            <span>${hotel.lat.toFixed(4)}, ${hotel.lng.toFixed(4)}</span>
+          </div>`}
+    </div>
+  `;
+  // 点击整个 hotel 卡片也能进入设置（除点按钮）
+  hotelCard.querySelector(".t-body").addEventListener("click", (e) => {
+    if (e.target.classList.contains("hotel-edit-mini")) return;
+    openHotelModal(day.n);
+  });
+  t.appendChild(hotelCard);
+
+  // 2) 渲染当日 POI 卡片
+  day.items.forEach((it, idx) => {
+    const catKey = "cat-" + it.cat;
+    const card = document.createElement("div");
+    card.className = `t-card ${catKey}` + (it.done ? " done" : "") + (it.hotelRef ? " hotelref-item" : "");
+    if (idx === state.activeCardIdx) card.classList.add("active");
+    card.dataset.idx = idx;
+    const locDisp = resolveItemLocation(it, day.n);
+    card.innerHTML = `
+      <div class="t-time"><div class="t-time-bubble">${idx + 1}</div></div>
+      <div class="t-body">
+        <div class="t-row1">
+          <h3 class="t-title">${it.title}</h3>
+          <span class="cat-badge cat-${it.cat}">${{
+            att: "景点", food: "美食", cul: "文化", shop: "购物"
+          }[it.cat]}</span>
+          <div class="t-check" title="标记完成"></div>
+        </div>
+        <div class="t-meta">
+          <span>${it.t}</span>
+          <span>📍 ${locDisp.name}</span>
+        </div>
+        ${it.note ? `<p class="t-note">${it.note}</p>` : ""}
+      </div>
+    `;
+    // 点击卡片 → 地图飞过去（hotelRef 项用解析后的坐标）
+    card.querySelector(".t-body").addEventListener("click", (e) => {
+      if (e.target.classList.contains("t-check")) return;
+      focusOnPOI(idx);
+    });
+    // 勾选完成
+    card.querySelector(".t-check").addEventListener("click", (e) => {
+      e.stopPropagation();
+      it.done = !it.done;
+      saveState();
+      renderTimeline();
+      renderTabs();
+      renderBanner();
+    });
+    t.appendChild(card);
+  });
+}
+
+function currentDayData() {
+  return TRIP.days.find(d => d.n === state.activeDay);
+}
+
+/* hotelRef 条目动态取当日酒店坐标；返回 { name, lng, lat } */
+function resolveItemLocation(item, dayN) {
+  if (item && item.hotelRef) {
+    const h = getHotelForDay(dayN);
+    if (h && h.lat && h.lng) {
+      return {
+        name: h.name ? `${h.name}（${item.location.name || ""}）` : (item.location.name || "酒店"),
+        lng: h.lng, lat: h.lat
+      };
+    }
+  }
+  return item.location;
+}
+
+/* Banner 统计 */
+function renderBanner() {
+  const today = currentDayData();
+  const todayDone = today.items.filter(it => it.done).length;
+  const todayTotal = today.items.length;
+  const todayPct = todayTotal ? Math.round(todayDone * 100 / todayTotal) : 0;
+
+  const totalDone = TRIP.days.reduce((s, d) => s + d.items.filter(it => it.done).length, 0);
+  const totalAll = TRIP.days.reduce((s, d) => s + d.items.length, 0);
+
+  $("#stat-current-day").textContent = (state.todayInfo && state.todayInfo.label) || `Day ${state.activeDay}`;
+  $("#stat-current-date").textContent = (state.todayInfo && state.todayInfo.sub)
+    ? state.todayInfo.sub
+    : `${today.date} · ${today.theme}`;
+  $("#stat-day-done").textContent = todayDone;
+  $("#stat-day-total").textContent = todayTotal;
+  $("#stat-day-percent").textContent = `${todayPct}% · ${todayDone === todayTotal && todayTotal ? "完成 ✓" : "加油"}`;
+
+  $("#stat-trip-done").textContent = totalDone;
+  $("#stat-trip-total").textContent = totalAll;
+
+  // 支出：由 expenses 流水自动汇总（不再手工填 budgets.spent）
+  const totalSpent = getTotalSpent();
+  const budgetPct = TRIP.budgets.total ? Math.min(100, Math.round(totalSpent * 100 / TRIP.budgets.total)) : 0;
+  $("#stat-budget-total").textContent = TRIP.budgets.total;
+  $("#stat-budget-spent").textContent = totalSpent;
+  $("#stat-budget-bar").style.width = budgetPct + "%";
+  const remain = Math.max(0, TRIP.budgets.total - totalSpent);
+  $("#stat-budget-percent").textContent = `已消耗 ${budgetPct}% · 剩余 ¥${remain}`;
+
+  // 今日支出小字
+  const todaySpent = getSpentByDay(state.activeDay);
+  let inline = $("#stat-budget-today");
+  if (!inline) {
+    inline = document.createElement("div");
+    inline.id = "stat-budget-today";
+    inline.className = "budget-spent-inline";
+    $("#stat-budget-percent").parentNode.insertBefore(inline, $("#stat-budget-percent").nextSibling);
+  }
+  inline.textContent = `Day ${state.activeDay} 已花 ¥${todaySpent} · 共 ${TRIP.expenses.length} 笔`;
+
+  // 头部进度条
+  $("#day-progress-bar").style.width = todayPct + "%";
+  $("#day-progress-text").textContent = `${todayDone}/${todayTotal}`;
+
+  // 当前激活日的酒店
+  const hotelStat = getHotelForDay(state.activeDay);
+  if (hotelStat && hotelStat.name) {
+    $("#stat-hotel-name").textContent = hotelStat.name;
+    $("#stat-hotel-info").textContent = `${hotelStat.address || "(未填地址)"} · Day ${state.activeDay}`;
+  } else {
+    // 退回到 Day 1 的酒店设置
+    const h1 = getHotelForDay(1);
+    if (h1 && h1.name) {
+      $("#stat-hotel-name").textContent = h1.name + "（Day 1）";
+      $("#stat-hotel-info").textContent = `${h1.address || ""} · Day ${state.activeDay} 暂未单独设置`;
+    } else {
+      $("#stat-hotel-name").textContent = "未设置酒店";
+      $("#stat-hotel-info").textContent = "点击右侧「管理」设置 Day 1 酒店";
+    }
+  }
+}
+
+function switchDay(n) {
+  state.activeDay = n;
+  state.activeCardIdx = -1;
+  TRIP.currentDay = n;
+  saveState();
+  renderTabs();
+  renderTimeline();
+  renderBanner();
+  renderMap();
+  scrollActiveTabIntoView();
+}
+
+/* 在移动端把当前激活的 Tab 滚动到视野中央 */
+function scrollActiveTabIntoView() {
+  const container = $("#day-tabs");
+  if (!container) return;
+  const active = container.querySelector(".day-tab.active");
+  if (!active) return;
+  // 优先用 scrollIntoView：scroll-snap 容器会自动吸附到中心
+  if (typeof active.scrollIntoView === "function") {
+    try {
+      active.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      return;
+    } catch (e) { /* 落到下面的手动计算 */ }
+  }
+  // 回退：手动计算滚动位置（需容器支持 scrollTo）
+  if (typeof container.scrollTo !== "function") return;
+  try {
+    const cRect = container.getBoundingClientRect();
+    const aRect = active.getBoundingClientRect();
+    const targetLeft = container.scrollLeft + (aRect.left - cRect.left) - (cRect.width - aRect.width) / 2;
+    container.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
+  } catch (e) {}
+}
+
+/* ============================================================
+   腾讯地图
+============================================================ */
+let map, markerLayer, polylineLayer, hotelMarkerLayer, routeVisible = true;
+
+const CAT_COLOR = {
+  att:  "#2563eb",
+  food: "#ea580c",
+  cul:  "#7c3aed",
+  shop: "#db2777"
+};
+const CAT_COLOR_LIGHT = {
+  att:  "#dbeafe",
+  food: "#ffedd5",
+  cul:  "#ede9fe",
+  shop: "#fce7f3"
+};
+const CAT_LABEL = { att: "景点", food: "美食", cul: "文化", shop: "购物" };
+
+function makeMarkerStyle(cat) {
+  if (typeof BMapGL === "undefined") return null;
+  return new BMapGL.Icon(makeMarkerSvg(cat), new BMapGL.Size(32, 40), {
+    anchor: new BMapGL.Size(16, 40),
+    imageSize: new BMapGL.Size(32, 40)
+  });
+}
+function makeHotelMarkerSvg() {
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 40'>
+    <path d='M16 40 C16 40 6 28 6 18 a10 10 0 1 1 20 0 c0 10 -10 22 -10 22 z'
+          fill='#d4af37' stroke='#fff' stroke-width='2'/>
+    <text x='16' y='22' text-anchor='middle' font-size='16' fill='#fff' font-family='sans-serif'>🏨</text>
+  </svg>`;
+  return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+}
+function makeMarkerSvg(cat) {
+  const c = CAT_COLOR[cat];
+  const label = CAT_LABEL[cat] || cat;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 40'>
+    <path d='M16 40 C16 40 6 28 6 18 a10 10 0 1 1 20 0 c0 10 -10 22 -10 22 z'
+          fill='${c}' stroke='#fff' stroke-width='2'/>
+    <circle cx='16' cy='17' r='7' fill='#fff'/>
+    <text x='16' y='20' text-anchor='middle' font-size='10' font-weight='700' fill='${c}' font-family='sans-serif'>${label}</text>
+  </svg>`;
+  return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+}
+
+/* GCJ-02 → BD09：把 TRIP 里的 POI 坐标喂给百度地图。数据仍以 GCJ-02 存储；跳转/渲染前转换。 */
+/* bd2gcj 在文件上部已经定义 */
+function gcj2bd(gcjLng, gcjLat) {
+  const PI = Math.PI;
+  const xPi = PI * 3000.0 / 180.0;
+  const z = Math.sqrt(gcjLng * gcjLng + gcjLat * gcjLat) + 0.00002 * Math.sin(gcjLat * xPi);
+  const theta = Math.atan2(gcjLat, gcjLng) + 0.000003 * Math.cos(gcjLng * xPi);
+  const bdLng = z * Math.cos(theta) + 0.0065;
+  const bdLat = z * Math.sin(theta) + 0.006;
+  return { lng: bdLng, lat: bdLat };
+}
+
+// 把 item + day 转成百度地图用的 Point
+function itemToBdPoint(item, dayN) {
+  const loc = resolveItemLocation(item, dayN);
+  const bd = gcj2bd(loc.lng, loc.lat);
+  return { pt: new BMapGL.Point(bd.lng, bd.lat), bd, name: loc.name, gcjLat: loc.lat, gcjLng: loc.lng, title: item.title, time: item.t, cat: item.cat };
+}
+
+function renderMap() {
+  if (typeof BMapGL === "undefined") {
+    $("#map-empty").style.display = "flex";
+    $("#map").style.display = "none";
+    $("#map-overlay-day").textContent = `Day ${state.activeDay}`;
+    $("#map-overlay-count").textContent = currentDayData().items.length;
+    return;
+  }
+  $("#map-empty").style.display = "none";
+  $("#map").style.display = "block";
+
+  const day = currentDayData();
+  // 清理旧图层
+  if (markerLayer && typeof markerLayer.clear === "function") {
+    markerLayer.clear();
+  } else if (markerLayer) {
+    markerLayer.forEach(m => map.removeOverlay(m));
+  }
+  markerLayer = [];
+
+  const pts = day.items.map(it => itemToBdPoint(it, day.n));
+
+  // 添加 POI 标记
+  pts.forEach((p, idx) => {
+    const marker = new BMapGL.Marker(p.pt, { icon: makeMarkerStyle(p.cat) });
+    marker.poiData = { idx, title: p.title, time: p.time, cat: p.cat, address: p.name };
+    marker.addEventListener("click", e => {
+      const d = marker.poiData;
+      openPoiInfoWindow(d, p);
+    });
+    map.addOverlay(marker);
+    markerLayer.push(marker);
+  });
+
+  // 酒店标记
+  if (hotelMarkerLayer) {
+    hotelMarkerLayer.forEach(m => map.removeOverlay(m));
+    hotelMarkerLayer = [];
+  } else {
+    hotelMarkerLayer = [];
+  }
+  const hotel = getHotelForDay(day.n);
+  if (hotel && hotel.lat && hotel.lng) {
+    const bd = gcj2bd(hotel.lng, hotel.lat);
+    const hpt = new BMapGL.Point(bd.lng, bd.lat);
+    const icon = new BMapGL.Icon(makeHotelMarkerSvg(), new BMapGL.Size(32, 40), {
+      anchor: new BMapGL.Size(16, 40), imageSize: new BMapGL.Size(32, 40)
+    });
+    const hm = new BMapGL.Marker(hpt, { icon });
+    hm.poiData = { idx: -1, title: hotel.name || "(未命名)", address: hotel.address || "", cat: "hotel", day: day.n };
+    hm.addEventListener("click", () => {
+      openHotelInfoWindow(hm.poiData, { lat: hotel.lat, lng: hotel.lng, bdLat: bd.lat, bdLng: bd.lng });
+      map.panTo(hpt); map.setZoom(16);
+    });
+    map.addOverlay(hm);
+    hotelMarkerLayer.push(hm);
+  }
+
+  // 路线 polyline
+  if (polylineLayer) { map.removeOverlay(polylineLayer); polylineLayer = null; }
+  if (pts.length > 1) {
+    const path = pts.map(p => p.pt);
+    polylineLayer = new BMapGL.Polyline(path, {
+      strokeColor: CAT_COLOR.att,
+      strokeWeight: 4,
+      strokeStyle: "dashed",
+      strokeOpacity: 0.9
+    });
+    map.addOverlay(polylineLayer);
+  }
+
+  fitToDay(day);
+}
+
+// POI 弹气泡：含"打开百度地图 APP / 打车 / 复制坐标"三个按钮
+function openPoiInfoWindow(d, p) {
+  const enc = encodeURIComponent;
+  const safeName = enc(d.title);
+  const appMarker = `baidumap://map/marker?location=${p.bd.lat},${p.bd.lng}&title=${safeName}&src=webapp.xian-trip`;
+  const appNavi   = `baidumap://map/direction?destination=${p.bd.lat},${p.bd.lng}&mode=driving&region=西安&src=webapp.xian-trip.taxi`;
+  const web       = `https://map.baidu.com/poi/?lat=${p.bd.lat}&lng=${p.bd.lng}&name=${safeName}`;
+  const html = `
+    <div class="bm-info">
+      <div class="bm-info-meta">${d.time} · ${CAT_LABEL[d.cat]}</div>
+      <div class="bm-info-title">${d.title}</div>
+      <div class="bm-info-addr">📍 ${d.address}</div>
+      <div class="bm-info-actions">
+        <a class="bm-act bm-act-app" href="${appMarker}" onclick="jumpToBaiduApp('${safeName}',${p.bd.lng},${p.bd.lat});return false;">📱 打开手机地图</a>
+        <a class="bm-act bm-act-taxi" href="${appNavi}" onclick="jumpToTaxi('${safeName}',${p.bd.lng},${p.bd.lat});return false;">🚗 一键打车</a>
+        <a class="bm-act bm-act-web" href="${web}" target="_blank">🌐 浏览器打开</a>
+        <button class="bm-act bm-act-copy" type="button" onclick="copyCoord(${p.bd.lat},${p.bd.lng})">📋 复制坐标</button>
+      </div>
+      <div class="bm-info-foot">BD09 坐标 · ${p.bd.lat.toFixed(4)}, ${p.bd.lng.toFixed(4)}</div>
+    </div>`;
+  const info = new BMapGL.InfoWindow(html, {
+    width: 250, height: 0, offset: new BMapGL.Size(0, -40),
+    enableMessage: false, enableCloseOnClick: true
+  });
+  map.openInfoWindow(info, p.pt);
+}
+
+// 酒店气泡：含 修改酒店 + 一键打开百度地图
+function openHotelInfoWindow(d, h) {
+  const safeName = encodeURIComponent(d.title || "酒店");
+  const appMarker = `baidumap://map/marker?location=${h.bdLat},${h.bdLng}&title=${safeName}&src=webapp.xian-trip.hotel`;
+  const web = `https://map.baidu.com/poi/?lat=${h.bdLat}&lng=${h.bdLng}&name=${safeName}`;
+  const html = `
+    <div class="bm-info">
+      <div class="bm-info-meta">🏨 今晚住宿 · Day ${d.day}</div>
+      <div class="bm-info-title">${d.title || "(未命名酒店)"}</div>
+      <div class="bm-info-addr">📍 ${d.address || "(未填地址)"}</div>
+      <div class="bm-info-actions">
+        <a class="bm-act bm-act-app" href="${appMarker}" onclick="jumpToBaiduApp('${safeName}',${h.bdLng},${h.bdLat});return false;">📱 打开手机地图</a>
+        <a class="bm-act bm-act-taxi" href="${appMarker.replace('marker','direction') + '&mode=driving&region=西安&src=webapp.xian-trip.taxi'}" onclick="jumpToTaxi('${safeName}',${h.bdLng},${h.bdLat});return false;">🚗 一键打车</a>
+        <button class="bm-act bm-act-edit" type="button" onclick="openHotelModal(${d.day})">✏️ 修改酒店</button>
+      </div>
+      <div class="bm-info-foot">BD09 坐标 · ${h.bdLat.toFixed(4)}, ${h.bdLng.toFixed(4)}</div>
+    </div>`;
+  const info = new BMapGL.InfoWindow(html, {
+    width: 250, height: 0, offset: new BMapGL.Size(0, -40),
+    enableMessage: false, enableCloseOnClick: true
+  });
+  map.openInfoWindow(info, new BMapGL.Point(h.bdLng, h.bdLat));
+}
+
+function fitToDay(day) {
+  if (!map || typeof BMapGL === "undefined") return;
+  const items = day.items.map(it => {
+    const loc = resolveItemLocation(it, day.n);
+    const bd = gcj2bd(loc.lng, loc.lat);
+    return new BMapGL.Point(bd.lng, bd.lat);
+  });
+  const hotel = getHotelForDay(day.n);
+  if (hotel && hotel.lat && hotel.lng) {
+    const bd = gcj2bd(hotel.lng, hotel.lat);
+    items.push(new BMapGL.Point(bd.lng, bd.lat));
+  }
+  if (items.length === 0) return;
+  if (items.length === 1) {
+    map.setCenter(items[0]); map.setZoom(15);
+    return;
+  }
+  try {
+    if (map.setViewport) {
+      map.setViewport(items, { padding: [80, 80, 80, 80] });
+    } else {
+      const lats = items.map(p => p.lat);
+      const lngs = items.map(p => p.lng);
+      map.setCenter(new BMapGL.Point(
+        (Math.min(...lngs) + Math.max(...lngs)) / 2,
+        (Math.min(...lats) + Math.max(...lats)) / 2
+      ));
+    }
+  } catch (e) {}
+}
+
+function focusOnPOI(idx, smooth = true) {
+  state.activeCardIdx = idx;
+  $$(".t-card").forEach(c => c.classList.remove("active"));
+  const card = $(`.t-card[data-idx="${idx}"]`);
+  if (card) card.classList.add("active");
+  if (!map || typeof BMapGL === "undefined") return;
+  const day = currentDayData();
+  const it = day.items[idx];
+  if (!it) return;
+  const loc = resolveItemLocation(it, day.n);
+  const bd = gcj2bd(loc.lng, loc.lat);
+  const pt = new BMapGL.Point(bd.lng, bd.lat);
+  map.setCenter(pt);
+  map.setZoom(16);
+}
+
+function toggleRoute() {
+  routeVisible = !routeVisible;
+  if (polylineLayer) {
+    polylineLayer.setStrokeOpacity(routeVisible ? 0.9 : 0);
+  }
+}
+
+/* ============================================================
+   Map Init
+============================================================ */
+function initMap() {
+  if (typeof BMapGL === "undefined") {
+    console.warn("百度地图加载失败：请检查 AK");
+    $("#map-empty").style.display = "flex";
+    $("#map").style.display = "none";
+    renderMapFallback();
+    renderBanner();
+    return;
+  }
+  $("#map-empty").style.display = "none";
+  $("#map").style.display = "block";
+
+  map = new BMapGL.Map("map", { enableMapClick: true, enableKeyboard: true });
+  // 西安市中心
+  map.centerAndZoom(new BMapGL.Point(108.95, 34.27), 11);
+  map.enableScrollWheelZoom(true);
+  map.setMapType(BMAP_NORMAL_MAP);
+
+  state.mapReady = true;
+  renderMap();
+  renderBanner();
+}
+
+/* 没百度地图 AK 时：渲染 POI 列表式卡片，含跳转按钮 */
+function renderMapFallback() {
+  const wrap = document.createElement("div");
+  wrap.id = "map-fallback-list";
+  wrap.style.cssText = "position:absolute;inset:0;overflow-y:auto;background:#fafaf6;padding:16px;box-sizing:border-box;font-family:inherit;";
+  wrap.innerHTML = `
+    <div style="font-size:13px;color:#888;margin-bottom:8px;">⚠️ 百度地图未加载（KEY 缺失）；在地图区下方可直接点 POI 跳转手机百度地图 / 打车</div>
+  `;
+  const day = currentDayData();
+  day.items.forEach((it, idx) => {
+    const loc = resolveItemLocation(it, day.n);
+    const bd = gcj2bd(loc.lng, loc.lat);
+    const enc = encodeURIComponent;
+    const safeName = enc(it.title);
+    const appMarker = `baidumap://map/marker?location=${bd.lat},${bd.lng}&title=${safeName}&src=webapp.xian-trip`;
+    const appNavi   = `baidumap://map/direction?destination=${bd.lat},${bd.lng}&mode=driving&region=西安&src=webapp.xian-trip.taxi`;
+    const web       = `https://map.baidu.com/poi/?lat=${bd.lat}&lng=${bd.lng}&name=${safeName}`;
+    const row = document.createElement("div");
+    row.style.cssText = "background:#fff;border:1px solid #ece8e0;border-radius:10px;padding:12px 14px;margin-bottom:8px;";
+    row.innerHTML = `
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${idx+1}. ${it.title} <span style="font-size:11px;padding:2px 6px;border-radius:4px;background:${CAT_COLOR[it.cat]}22;color:${CAT_COLOR[it.cat]};font-weight:500;">${CAT_LABEL[it.cat]}</span></div>
+      <div style="font-size:12px;color:#888;margin-bottom:8px;">${it.t} · 📍 ${loc.name}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <a href="${appMarker}" onclick="jumpToBaiduApp('${safeName}',${bd.lng},${bd.lat});return false;" style="background:#fff7ed;color:#c2410c;padding:6px 10px;border:1px solid #fed7aa;border-radius:6px;font-size:12px;text-decoration:none;">📱 手机地图</a>
+        <a href="${appNavi}" onclick="jumpToTaxi('${safeName}',${bd.lng},${bd.lat});return false;" style="background:#eff6ff;color:#2563eb;padding:6px 10px;border:1px solid #dbeafe;border-radius:6px;font-size:12px;text-decoration:none;">🚗 打车</a>
+        <a href="${web}" target="_blank" style="background:#f0f9ff;color:#0369a1;padding:6px 10px;border:1px solid #bae6fd;border-radius:6px;font-size:12px;text-decoration:none;">🌐 网页版</a>
+      </div>
+    `;
+    wrap.appendChild(row);
+  });
+  const old = document.getElementById("map-fallback-list");
+  if (old) old.remove();
+  $("#map").style.display = "none";
+  $("#map-empty").style.display = "none";
+  document.querySelector(".map-side").appendChild(wrap);
+}
+
+// 全局错误捕获：哪怕某个老 WebView 出错，也能在屏幕上看到错误，而不是空白页
+window.addEventListener("error", (e) => {
+  console.error("[window.error]", e.message, e.filename, e.lineno);
+  try {
+    let errBox = document.getElementById("__err_box");
+    if (!errBox) {
+      errBox = document.createElement("div");
+      errBox.id = "__err_box";
+      errBox.style.cssText = "position:fixed;left:8px;right:8px;bottom:8px;z-index:9999;padding:10px 12px;background:#fee2e2;border:1px solid #f87171;border-radius:8px;color:#7f1d1d;font-size:12px;font-family:monospace;max-height:40vh;overflow:auto;box-shadow:0 4px 12px rgba(0,0,0,0.15);";
+      document.body.appendChild(errBox);
+    }
+    const msg = `${e.message || "JS error"} @ ${e.filename || ""}:${e.lineno || ""}`;
+    if (!errBox.dataset.msg || errBox.dataset.msg !== msg) {
+      errBox.dataset.msg = msg;
+      errBox.innerHTML = `<b>⚠️ 页面运行出错（点击关闭）</b><br>${msg.replace(/</g,"&lt;")}`;
+      errBox.style.cursor = "pointer";
+      errBox.onclick = () => { errBox.style.display = "none"; };
+    }
+  } catch (_) {}
+});
+window.addEventListener("unhandledrejection", (e) => {
+  console.error("[unhandledrejection]", e.reason);
+});
+
+// 处理百度地图脚本加载失败
+window.addEventListener("load", () => {
+  if (typeof BMapGL === "undefined") {
+    $("#map-empty").style.display = "none";
+    if (typeof renderMapFallback === "function") safeCall("load-fallback", renderMapFallback);
+  }
+});
+
+/* ============================================================
+   预算弹窗
+============================================================ */
+/* 预算分类定义 */
+const BUDGET_CATS = [
+  { key: "hotel",     label: "酒店", emoji: "🏨", color: "#d4af37" },
+  { key: "transport", label: "交通", emoji: "🚗", color: "#2563eb" },
+  { key: "food",      label: "吃饭", emoji: "🍜", color: "#ea580c" },
+  { key: "shopping",  label: "购物", emoji: "🛍", color: "#db2777" }
+];
+const CAT_MAP = BUDGET_CATS.reduce((m, c) => { m[c.key] = c; return m; }, {});
+
+/* ---- 统计工具 ---- */
+function getTotalSpent() {
+  return TRIP.expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+}
+function getSpentByCategory(cat) {
+  return TRIP.expenses
+    .filter(e => e.category === cat)
+    .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+}
+function getSpentByDay(day) {
+  return TRIP.expenses
+    .filter(e => Number(e.day) === Number(day))
+    .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+}
+
+/* ---- 预算清单弹窗 ---- */
+function openBudgetModal() {
+  $("#budget-total-input").value = TRIP.budgets.total;
+  BUDGET_CATS.forEach(c => {
+    const inp = $("#budget-cat-" + c.key);
+    if (inp) inp.value = (TRIP.budgets.categories && TRIP.budgets.categories[c.key]) || 0;
+  });
+  renderBudgetSpentList();
+  updateBudgetSummary();
+  $("#budget-modal").classList.add("show");
+}
+function closeBudgetModal() {
+  $("#budget-modal").classList.remove("show");
+}
+
+// 实时显示分类合计 vs 总预算
+function updateBudgetSummary() {
+  const total = Number($("#budget-total-input").value) || 0;
+  const sum = BUDGET_CATS.reduce((s, c) => {
+    const v = Number($("#budget-cat-" + c.key).value);
+    return s + (isNaN(v) ? 0 : v);
+  }, 0);
+  const el = $("#budget-summary");
+  const diff = sum - total;
+  if (!el) return;
+  el.textContent = `分类合计 ¥${sum} · 与总预算${diff === 0 ? "一致" : (diff > 0 ? "超出 ¥" + diff : "差 ¥" + Math.abs(diff))}`;
+  el.className = "budget-summary" + (diff === 0 ? " ok" : (diff > 0 ? " warn" : ""));
+}
+
+// 已支出（按分类）小条形
+function renderBudgetSpentList() {
+  const wrap = $("#budget-spent-list");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  BUDGET_CATS.forEach(c => {
+    const budget = (TRIP.budgets.categories && TRIP.budgets.categories[c.key]) || 0;
+    const spent = getSpentByCategory(c.key);
+    const pct = budget ? Math.min(100, Math.round(spent * 100 / budget)) : (spent ? 100 : 0);
+    const row = document.createElement("div");
+    row.className = "budget-spent-item";
+    row.innerHTML = `
+      <span class="nm">${c.emoji} ${c.label}</span>
+      <span class="bar"><i style="width:${pct}%;background:${c.color}"></i></span>
+      <span class="vl">¥${spent}/${budget}</span>
+    `;
+    wrap.appendChild(row);
+  });
+}
+
+// 按总预算平分成 4 类
+function autoFillBudget() {
+  const total = Number($("#budget-total-input").value) || 0;
+  const per = Math.round(total / BUDGET_CATS.length);
+  BUDGET_CATS.forEach((c, i) => {
+    // 最后一个补齐余数，保证合计精确等于总预算
+    const v = (i === BUDGET_CATS.length - 1) ? (total - per * (BUDGET_CATS.length - 1)) : per;
+    const inp = $("#budget-cat-" + c.key);
+    if (inp) inp.value = v;
+  });
+  updateBudgetSummary();
+}
+
+function saveBudget() {
+  const t = parseInt($("#budget-total-input").value, 10);
+  if (!isNaN(t)) TRIP.budgets.total = t;
+  if (!TRIP.budgets.categories) TRIP.budgets.categories = {};
+  BUDGET_CATS.forEach(c => {
+    const v = parseInt($("#budget-cat-" + c.key).value, 10);
+    TRIP.budgets.categories[c.key] = isNaN(v) ? 0 : Math.max(0, v);
+  });
+  saveState();
+  closeBudgetModal();
+  renderBanner();
+  renderTabs();
+  showToast("✓ 预算清单已保存");
+}
+
+/* ---- 记一笔支出弹窗 ---- */
+let expenseCat = "food";
+let expenseDay = 1;
+
+function openExpenseModal() {
+  expenseCat = expenseCat || "food";
+  expenseDay = state.activeDay || 1;
+  buildExpenseDayPicker();
+  pickExpenseCat(expenseCat);
+  $("#expense-amount").value = "";
+  $("#expense-note").value = "";
+  renderExpenseHistory();
+  $("#expense-modal").classList.add("show");
+}
+function closeExpenseModal() {
+  $("#expense-modal").classList.remove("show");
+}
+
+function buildExpenseDayPicker() {
+  const wrap = $("#expense-day-picker");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  TRIP.days.forEach(d => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "expense-day-btn" + (d.n === expenseDay ? " active" : "");
+    b.textContent = `D${d.n}`;
+    b.onclick = () => {
+      expenseDay = d.n;
+      wrap.querySelectorAll(".expense-day-btn").forEach(x => x.classList.remove("active"));
+      b.classList.add("active");
+    };
+    wrap.appendChild(b);
+  });
+}
+
+function pickExpenseCat(cat) {
+  expenseCat = cat;
+  const wrap = $("#expense-cat-picker");
+  if (wrap) {
+    wrap.querySelectorAll(".expense-cat-btn").forEach(b => {
+      b.classList.toggle("active", b.dataset.cat === cat);
+    });
+  }
+}
+
+function saveExpense() {
+  const amount = parseFloat($("#expense-amount").value);
+  if (isNaN(amount) || amount <= 0) { alert("请填写支出金额（大于 0）"); return; }
+  const note = ($("#expense-note").value || "").trim();
+  TRIP.expenses.push({
+    id: "e" + Date.now() + Math.random().toString(36).slice(2, 7),
+    day: expenseDay,
+    category: expenseCat,
+    amount: Math.round(amount * 100) / 100,
+    note,
+    ts: Date.now()
+  });
+  saveState();
+  $("#expense-amount").value = "";
+  $("#expense-note").value = "";
+  renderExpenseHistory();
+  renderBudgetSpentList();
+  updateBudgetSummary();
+  renderBanner();
+  renderTabs();
+  showToast(`✓ 已记录：${CAT_MAP[expenseCat].emoji} ${CAT_MAP[expenseCat].label} ¥${amount} · Day ${expenseDay}`);
+}
+
+function deleteExpense(id) {
+  const idx = TRIP.expenses.findIndex(e => e.id === id);
+  if (idx < 0) return;
+  TRIP.expenses.splice(idx, 1);
+  saveState();
+  renderExpenseHistory();
+  renderBudgetSpentList();
+  updateBudgetSummary();
+  renderBanner();
+  renderTabs();
+}
+
+// 每日汇总 + 流水
+function renderExpenseHistory() {
+  // 每日汇总
+  const sumWrap = $("#expense-day-summary");
+  if (sumWrap) {
+    sumWrap.innerHTML = "";
+    TRIP.days.forEach(d => {
+      const v = getSpentByDay(d.n);
+      const cell = document.createElement("div");
+      cell.className = "exp-day-cell" + (v > 0 ? " has" : "");
+      cell.innerHTML = `<div class="d">D${d.n}</div><div class="v">¥${v}</div>`;
+      sumWrap.appendChild(cell);
+    });
+  }
+  // 流水
+  const list = $("#expense-list");
+  if (!list) return;
+  const sorted = TRIP.expenses.slice().sort((a, b) => (a.day - b.day) || (b.ts - a.ts));
+  if (!sorted.length) {
+    list.innerHTML = `<div class="expense-empty">还没有支出记录，先记一笔吧 💸</div>`;
+    return;
+  }
+  list.innerHTML = "";
+  sorted.forEach(e => {
+    const c = CAT_MAP[e.category] || { label: e.category, emoji: "💰", color: "#888" };
+    const row = document.createElement("div");
+    row.className = "expense-item";
+    row.innerHTML = `
+      <span class="cat" style="background:${c.color}22;color:${c.color};">${c.emoji} ${c.label}</span>
+      <span class="day">D${e.day}</span>
+      <span class="note">${e.note || "—"}</span>
+      <span class="amt">¥${e.amount}</span>
+      <button class="del" type="button" onclick="deleteExpense('${e.id}')" title="删除">×</button>
+    `;
+    list.appendChild(row);
+  });
+}
+
+// 轻量 toast
+function showToast(msg) {
+  const old = document.getElementById("__toast");
+  if (old) old.remove();
+  const tip = document.createElement("div");
+  tip.id = "__toast";
+  tip.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:10px 20px;border-radius:8px;z-index:300;box-shadow:0 4px 16px rgba(0,0,0,0.2);font-size:13px;";
+  tip.textContent = msg;
+  document.body.appendChild(tip);
+  setTimeout(() => tip.remove(), 2200);
+}
+
+/* ============================================================
+   酒店设置
+   - openHotelModal(day)：打开针对某一天的酒店设置弹窗
+   - 用户输入酒店名+详细地址 → 调用腾讯地图 WebService Geocoder 精确匹配
+   - mini-map 可点击微调坐标
+   - 选择"应用到仅今晚 / 后续 / 全部"，落库
+============================================================ */
+let hotelMiniMap = null;
+let hotelMiniMarker = null;
+let hotelMiniSelectedPos = null;   // { lat, lng }
+let hotelModalDay = 1;             // 弹窗当前编辑哪一天
+
+// 获取脚本里占位的百度地图 Key（用于 WebService / 跳转链接里的 ak 校验）
+function getTMapKey() {
+  // 保持函数名 getTMapKey 不破坏旧调用；实际取的是百度 ak
+  return getBaiduKey();
+}
+
+function openHotelModal(day) {
+  hotelModalDay = day || state.activeDay;
+  const h = TRIP.hotels.find(x => x.day === hotelModalDay) || TRIP.hotels[0];
+
+  $("#hotel-modal-title").textContent = `🏨 设置酒店 · Day ${hotelModalDay}`;
+  $("#hotel-target-day").textContent = hotelModalDay;
+  $("#hotel-name-input").value = h.name || "";
+  $("#hotel-address-input").value = h.address || "";
+  $("#hotel-coord-display").textContent =
+    h && h.lat && h.lng ? `${h.lat.toFixed(4)}, ${h.lng.toFixed(4)}` : "— , —";
+  // 重置 radio 到 "仅今晚"
+  document.querySelectorAll('input[name="hotel-apply"]').forEach(r => { r.checked = (r.value === "only"); });
+
+  $("#hotel-modal").classList.add("show");
+
+  // mini 地图延迟初始化（DOM 刚显示出来）
+  setTimeout(() => initHotelMiniMap(h.lat, h.lng), 80);
+}
+
+function closeHotelModal() {
+  $("#hotel-modal").classList.remove("show");
+}
+
+function initHotelMiniMap(lat, lng) {
+  if (typeof BMapGL === "undefined") {
+    const m = document.getElementById("hotel-mini-map");
+    if (m) {
+      m.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12px;color:#888;padding:20px;text-align:center;">⚠️ 百度地图未加载<br>请检查 AK<br>可在下方直接输入经纬度或手动拾取</div>';
+    }
+    return;
+  }
+  if (hotelMiniMap) {
+    // 已有：更新中心和 marker
+    const bd = gcj2bd(lng, lat);
+    const pt = new BMapGL.Point(bd.lng, bd.lat);
+    hotelMiniMap.setCenter(pt);
+    hotelMiniMap.setZoom(16);
+    setHotelMiniMarker(pt, lat, lng);
+    hotelMiniSelectedPos = { lat, lng };
+    return;
+  }
+  const bd = gcj2bd(lng, lat);
+  const pt = new BMapGL.Point(bd.lng, bd.lat);
+  hotelMiniMap = new BMapGL.Map("hotel-mini-map", { enableMapClick: true });
+  hotelMiniMap.centerAndZoom(pt, 15);
+  hotelMiniMap.enableScrollWheelZoom(true);
+
+  // 标记
+  const icon = new BMapGL.Icon(makeHotelMarkerSvg(), new BMapGL.Size(32, 40), {
+    anchor: new BMapGL.Size(16, 40),
+    imageSize: new BMapGL.Size(32, 40)
+  });
+  hotelMiniMarker = new BMapGL.Marker(pt, { icon });
+  hotelMiniMap.addOverlay(hotelMiniMarker);
+  hotelMiniSelectedPos = { lat, lng };
+
+  // 点击地图：移动标记（用户在百度地图上点，拿到 BD09，再转 GCJ-02 存到 TRIP）
+  hotelMiniMap.addEventListener("click", (e) => {
+    const bdLat = e.latlng.lat, bdLng = e.latlng.lng;
+    const gcj = bd2gcj(bdLng, bdLat);
+    const pt2 = new BMapGL.Point(bdLng, bdLat);
+    setHotelMiniMarker(pt2, gcj.lat, gcj.lng);
+    hotelMiniSelectedPos = { lat: gcj.lat, lng: gcj.lng };
+    $("#hotel-coord-display").textContent = `${gcj.lat.toFixed(4)}, ${gcj.lng.toFixed(4)}`;
+  });
+}
+
+function setHotelMiniMarker(pt, gcjLat, gcjLng) {
+  if (!hotelMiniMap || !hotelMiniMarker) return;
+  hotelMiniMap.removeOverlay(hotelMiniMarker);
+  const icon = new BMapGL.Icon(makeHotelMarkerSvg(), new BMapGL.Size(32, 40), {
+    anchor: new BMapGL.Size(16, 40),
+    imageSize: new BMapGL.Size(32, 40)
+  });
+  hotelMiniMarker = new BMapGL.Marker(pt, { icon });
+  hotelMiniMap.addOverlay(hotelMiniMarker);
+}
+
+// 搜索地址：调腾讯地图 WebService Geocoder
+async function searchHotelAddress() {
+  const name = $("#hotel-name-input").value.trim();
+  const addr = $("#hotel-address-input").value.trim();
+  if (!name && !addr) { alert("请先填写酒店名称或详细地址"); return; }
+
+  const key = getTMapKey();
+  if (!key || key === "YOUR_BAIDU_KEY") {
+    alert("⚠️ 百度地图 AK 还没填，无法调用精确匹配接口。\n\n请直接在地图上点击选择位置。");
+    return;
+  }
+
+  // 优先用酒店名 + 地址拼成完整关键词（百度地理编码建议带城市名）
+  const keyword = ([name, addr, "西安市"].filter(Boolean).join(" "));
+  const url = `https://api.map.baidu.com/geocoding/v3/?address=${encodeURIComponent(keyword)}&output=json&ak=${encodeURIComponent(key)}`;
+  const btn = document.querySelector(".hotel-search-btn");
+  const oldText = btn.textContent;
+  btn.textContent = "查询中…";
+  btn.disabled = true;
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.status === 0 && data.result && data.result.location) {
+      const loc = data.result.location;
+      // 百度返回的是 BD09，存到 TRIP 时转回 GCJ-02（保持数据统一）
+      const g = bd2gcj(loc.lng, loc.lat);
+      hotelMiniSelectedPos = { lat: g.lat, lng: g.lng };
+      initHotelMiniMap(g.lat, g.lng);
+      $("#hotel-coord-display").textContent = `${g.lat.toFixed(4)}, ${g.lng.toFixed(4)}`;
+    } else {
+      alert(`未找到精确地址 (status=${data.status})\n${data.message || ""}\n\n试试更换关键词、或直接在地图上点选`);
+    }
+  } catch (e) {
+    alert("网络异常，请重试");
+    console.error(e);
+  } finally {
+    btn.textContent = oldText;
+    btn.disabled = false;
+  }
+}
+
+function saveHotel() {
+  const name = $("#hotel-name-input").value.trim();
+  const address = $("#hotel-address-input").value.trim();
+  const pos = hotelMiniSelectedPos || (TRIP.hotels.find(x => x.day === hotelModalDay) || TRIP.hotels[0]);
+  const applyRange = (document.querySelector('input[name="hotel-apply"]:checked') || {}).value || "only";
+
+  const data = {
+    name, address,
+    lat: pos.lat, lng: pos.lng
+  };
+
+  if (applyRange === "only") {
+    setHotelForDay(hotelModalDay, data);
+  } else if (applyRange === "forward") {
+    for (let d = hotelModalDay; d <= TRIP.totalDays; d++) setHotelForDay(d, data);
+  } else if (applyRange === "all") {
+    for (let d = 1; d <= TRIP.totalDays; d++) setHotelForDay(d, data);
+  }
+
+  saveState();
+  closeHotelModal();
+  renderTimeline();
+  renderMap();
+  renderBanner();
+  renderTabs();
+  const dayInfo = applyRange === "only" ? `Day ${hotelModalDay}` :
+                  applyRange === "forward" ? `Day ${hotelModalDay} — Day ${TRIP.totalDays}` : "全部天数";
+  // 简单反馈
+  const tip = document.createElement("div");
+  tip.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:10px 20px;border-radius:8px;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,0.2);font-size:13px;";
+  tip.textContent = `✓ 已保存：${name || "未命名"} → ${dayInfo}`;
+  document.body.appendChild(tip);
+  setTimeout(() => tip.remove(), 2200);
+}
+
+function setHotelForDay(day, data) {
+  const h = TRIP.hotels.find(x => x.day === day);
+  if (!h) return;
+  h.name = data.name || "";
+  h.address = data.address || "";
+  h.lat = data.lat;
+  h.lng = data.lng;
+}
+
+function getHotelForDay(day) {
+  return TRIP.hotels.find(x => x.day === day) || null;
+}
+
+/* ============================================================
+   当前第几天（按系统时间匹配）
+   - 未开始（行程前）：还有 N 天开始
+   - 进行中：Day N
+   - 行程结束（行程后）：已收官
+============================================================ */
+function parseLocalDate(dateStr) {
+  // "2026-10-02" → 本地日期（无视时区，避免 ISO 字符串被解析为 UTC）
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+function getTodayDayInfo() {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());  // 本地 00:00
+  const start = parseLocalDate(TRIP.startDate);
+  const end   = parseLocalDate(TRIP.endDate);
+  if (today.getTime() < start.getTime()) {
+    const daysToGo = Math.round((start - today) / 86400000);
+    return { state: "before", daysToGo, label: `未开始`, sub: `还有 ${daysToGo} 天出发` };
+  }
+  if (today.getTime() > end.getTime()) {
+    return { state: "after", label: `行程结束`, sub: `共 5 天 · 已收官 ✈️` };
+  }
+  const day = Math.round((today - start) / 86400000) + 1;
+  const date = TRIP.days[day - 1] && TRIP.days[day - 1].date;
+  return { state: "during", day, label: `Day ${day}`, sub: date ? `${date} · ${TRIP.days[day-1].theme}` : "" };
+}
+
+/* ============================================================
+   百度地图跳转 / 打车（在移动端调起 APP，桌面降级为网页）
+   - baidumap:// URL Scheme：标记点（Marker）、路径规划（Direction）
+   - 兼容高德 amapuri、滴滴出行（若有需要可扩展）
+============================================================ */
+function gcj2bd(gcjLng, gcjLat) {
+  const PI = Math.PI;
+  const xPi = PI * 3000.0 / 180.0;
+  const z = Math.sqrt(gcjLng * gcjLng + gcjLat * gcjLat) + 0.00002 * Math.sin(gcjLat * xPi);
+  const theta = Math.atan2(gcjLat, gcjLng) + 0.000003 * Math.cos(gcjLng * xPi);
+  const bdLng = z * Math.cos(theta) + 0.0065;
+  const bdLat = z * Math.sin(theta) + 0.006;
+  return { lng: bdLng, lat: bdLat };
+}
+function bd2gcj(bdLng, bdLat) {
+  const PI = Math.PI;
+  const xPi = PI * 3000.0 / 180.0;
+  const x = bdLng - 0.0065;
+  const y = bdLat - 0.006;
+  const z = Math.sqrt(x * x + y * y) - 0.00002 * Math.sin(y * xPi);
+  const theta = Math.atan2(y, x) - 0.000003 * Math.cos(x * xPi);
+  const gcjLng = z * Math.cos(theta);
+  const gcjLat = z * Math.sin(theta);
+  return { lng: gcjLng, lat: gcjLat };
+}
+
+// 检查脚本 URL 里是否有 BAIDU_KEY（占位符替换用）
+function getBaiduKey() {
+  const scripts = document.querySelectorAll('script[src*="api.map.baidu.com"]');
+  for (const s of scripts) {
+    const m = s.src.match(/[?&]ak=([^&]+)/);
+    if (m) return m[1];
+  }
+  return "";
+}
+
+// 一键跳转到手机百度地图 APP 标记点；2 秒后未离开则降级为网页版
+function jumpToBaiduApp(name, lng, lat) {
+  const enc = encodeURIComponent;
+  const appMarker = `baidumap://map/marker?location=${lat},${lng}&title=${enc(name)}&src=webapp.xian-trip`;
+  const appNavi   = `baidumap://map/direction?destination=${lat},${lng}&mode=driving&region=西安&src=webapp.xian-trip`;
+  const web       = `https://map.baidu.com/poi/?lat=${lat}&lng=${lng}&name=${enc(name)}`;
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isMobile) {
+    const t0 = Date.now();
+    const onBlur = () => {
+      window.removeEventListener("blur", onBlur);
+      // APP 激活成功：什么都不做
+    };
+    window.addEventListener("blur", onBlur);
+    // 通过隐藏 iframe 触发 scheme
+    const iframe = document.createElement("iframe");
+    iframe.style.display = "none";
+    iframe.src = appMarker;
+    document.body.appendChild(iframe);
+    setTimeout(() => { try { document.body.removeChild(iframe); } catch(e){} }, 2000);
+    setTimeout(() => {
+      // 2.1 秒后还在当前页面说明未唤起 APP，降级
+      if (document.visibilityState === "visible" && Date.now() - t0 >= 1900) {
+        window.open(web, "_blank");
+      }
+    }, 2100);
+  } else {
+    window.open(web, "_blank");
+  }
+}
+
+// 一键打车到目标点（调起百度地图 APP 的路径规划）
+function jumpToTaxi(name, lng, lat) {
+  const enc = encodeURIComponent;
+  const appNavi = `baidumap://map/direction?destination=${lat},${lng}&mode=driving&region=西安&src=webapp.xian-trip.taxi`;
+  const web     = `https://map.baidu.com/direction?mode=driving&destination=${lat},${lng}&region=西安`;
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isMobile) {
+    const iframe = document.createElement("iframe");
+    iframe.style.display = "none";
+    iframe.src = appNavi;
+    document.body.appendChild(iframe);
+    setTimeout(() => { try { document.body.removeChild(iframe); } catch(e){} }, 2000);
+  }
+  setTimeout(() => window.open(web, "_blank"), 400);
+}
+
+// 复制坐标到剪贴板
+function copyCoord(lat, lng) {
+  const text = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => showToast(`✓ 已复制坐标：${text}`),
+      () => fallbackCopy(text)
+    );
+  } else {
+    fallbackCopy(text);
+  }
+}
+function fallbackCopy(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed"; ta.style.left = "-9999px";
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand("copy"); showToast(`✓ 已复制：${text}`); }
+  catch(e) { showToast("复制失败，请长按选中"); }
+  finally { document.body.removeChild(ta); }
+}
+
+/* ============================================================
+   启动
+============================================================ */
+function start() {
+  safeCall("loadState", loadState);
+  state.activeDay = TRIP.currentDay;
+
+  // 根据系统时间自动定位到当前天（仅当处于行程期间时覆盖 localStorage 的 currentDay）
+  try {
+    const todayInfo = getTodayDayInfo();
+    if (todayInfo.state === "during") {
+      state.activeDay = todayInfo.day;
+      TRIP.currentDay = todayInfo.day;
+    }
+    state.todayInfo = todayInfo;
+  } catch (e) { console.warn("getTodayDayInfo 失败：", e); }
+
+  // 每步单独容错：一个出错不影响其他
+  safeCall("renderTabs", renderTabs);
+  safeCall("renderTimeline", renderTimeline);
+  safeCall("renderBanner", renderBanner);
+
+  // 等百度地图 API ready
+  if (typeof BMapGL !== "undefined") {
+    safeCall("initMap", initMap);
+  } else {
+    // 重试一次（脚本可能晚到）
+    setTimeout(() => {
+      if (typeof BMapGL !== "undefined") safeCall("initMap(retry)", initMap);
+      else {
+        $("#map-empty").style.display = "flex";
+        $("#map").style.display = "none";
+        safeCall("renderMapFallback", renderMapFallback);
+      }
+    }, 800);
+  }
+
+  // 移动端：渲染后把当前激活的 Tab 滚到视野中央
+  setTimeout(() => safeCall("scrollActiveTabIntoView", scrollActiveTabIntoView), 50);
+}
+
+// 通用容错包装：捕获错误并在 console 显示，不让一个步骤崩溃整个 start()
+function safeCall(name, fn) {
+  try { fn(); } catch (e) { console.error("[" + name + "] 出错：", e); }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  start();
+  // 预算按钮已经在 HTML 内通过 inline onclick 绑定，避免重复触发
+  $("#budget-modal").addEventListener("click", (e) => {
+    if (e.target.id === "budget-modal") closeBudgetModal();
+  });
+  const em = $("#expense-modal");
+  if (em) em.addEventListener("click", (e) => {
+    if (e.target.id === "expense-modal") closeExpenseModal();
+  });
+  $("#fit-btn").addEventListener("click", () => fitToDay(currentDayData()));
+  $("#toggle-route-btn").addEventListener("click", toggleRoute);
+
+  // 酒店模态事件
+  const hm = $("#hotel-modal");
+  if (hm) hm.addEventListener("click", (e) => {
+    if (e.target.id === "hotel-modal") closeHotelModal();
+  });
+
+  // 旋转 / 窗口尺寸变化后，重新把当前激活的 Tab 滚到中央
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(scrollActiveTabIntoView, 120);
+  });
+});
+</script>
+<!-- 离线状态条：服务器休眠 / 断网时提示，内容仍来自本地缓存 -->
+<div id="offline-bar" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:9999;
+     background:#78350f;color:#fde68a;font-size:12px;line-height:1.6;padding:8px 14px;text-align:center;
+     box-shadow:0 -2px 10px rgba(0,0,0,.2);">
+  📴 当前离线，内容来自本地缓存（行程、酒店、预算都可正常查看）
+</div>
+
+<script>
+/* ============================================================
+   PWA：注册 Service Worker，实现离线可用
+   —— 服务器休眠后，页面仍从本地缓存加载，不会被"停止工作"影响
+   ============================================================ */
+(function () {
+  if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("./sw.js").catch(function () {});
+    });
+  }
+
+  var bar = document.getElementById("offline-bar");
+  function syncNet() {
+    if (!bar) return;
+    bar.style.display = navigator.onLine === false ? "block" : "none";
+  }
+  window.addEventListener("online", syncNet);
+  window.addEventListener("offline", syncNet);
+  syncNet();
+
+  // 探测服务器是否可达（沙箱休眠时 HTTP 会失败），不可达也提示"离线缓存模式"
+  function probe() {
+    if (navigator.onLine === false) return;
+    fetch(location.href, { method: "HEAD", cache: "no-store" })
+      .then(function (r) { if (!r.ok && bar) bar.style.display = "block"; })
+      .catch(function () { if (bar) bar.style.display = "block"; });
+  }
+  setTimeout(probe, 1500);
+})();
+</script>
+</body>
+</html>

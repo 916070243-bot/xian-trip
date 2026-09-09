@@ -1,0 +1,17 @@
+{
+  "name": "西安 5 日深度游 · 行程规划",
+  "short_name": "西安行程",
+  "description": "西安 5 日行程时间轴、酒店定位、预算与支出记录",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#c43c2f",
+  "theme_color": "#c43c2f",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
