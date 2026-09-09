@@ -407,8 +407,14 @@ html, body {
 .t-meta .meta-time { color: var(--text-secondary); font-weight: 500; }
 .t-meta .meta-time::before { content: ""; }
 
-/* 地点行 — 可点击编辑 */
-.t-meta .loc-edit {
+/* 地点行 — [📍 地点] [✏️] ；点链接弹动作面板，点 ✏️ 进内联编辑 */
+.t-meta .loc-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+}
+.t-meta .loc-link {
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -416,15 +422,46 @@ html, body {
   border-bottom: 1px dashed transparent;
   padding: 1px 2px;
   border-radius: 3px;
-  max-width: 100%;
+  min-width: 0;
+  -webkit-tap-highlight-color: rgba(0,0,0,.04);
+  touch-action: manipulation;
 }
-.t-meta .loc-edit:hover {
+.t-meta .loc-link:hover,
+.t-meta .loc-link:active {
   border-bottom-color: var(--text-muted);
   background: #fafaf6;
 }
-.t-meta .loc-edit .loc-icon { font-size: 10px; opacity: 0.6; }
-.t-meta .loc-edit .loc-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
-.t-meta .loc-edit .loc-text.empty { color: var(--text-muted); font-style: italic; }
+.t-meta .loc-link .loc-icon { font-size: 10px; opacity: 0.65; flex-shrink: 0; }
+.t-meta .loc-link .loc-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+  font-size: 12px;
+  flex-shrink: 1;
+  min-width: 0;
+}
+.t-meta .loc-link .loc-text.empty { color: var(--text-muted); font-style: italic; }
+.t-meta .loc-edit-btn {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-secondary);
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  transition: all .15s;
+  -webkit-tap-highlight-color: rgba(0,0,0,.06);
+  touch-action: manipulation;
+}
+.t-meta .loc-edit-btn:hover { background: #f0f0eb; border-color: var(--border-strong); color: #111; }
 .t-meta .loc-input {
   font-size: 12px;
   padding: 2px 6px;
@@ -436,6 +473,73 @@ html, body {
   max-width: 100%;
   font-family: inherit;
 }
+
+/* 地点动作面板（底部弹层） */
+.loc-action-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 9999;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn .2s ease;
+}
+.loc-action-sheet {
+  width: 100%;
+  max-width: 480px;
+  background: #fff;
+  border-radius: 16px 16px 0 0;
+  padding: 8px 0 env(safe-area-inset-bottom, 12px);
+  animation: slideUp .25s cubic-bezier(.22,.85,.36,1);
+  box-shadow: 0 -8px 32px rgba(0,0,0,0.15);
+}
+.loc-action-title {
+  padding: 14px 18px 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.loc-action-title b {
+  color: #111;
+  font-size: 14px;
+  display: block;
+  margin-bottom: 2px;
+}
+.loc-action-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+}
+.loc-action-list li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 22px;
+  font-size: 15px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: rgba(0,0,0,.06);
+  user-select: none;
+  border-bottom: 1px solid #f5f3ee;
+}
+.loc-action-list li:last-child { border-bottom: none; }
+.loc-action-list li:active { background: #faf8f3; }
+.loc-action-list li .ico {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.loc-action-list li.baidu  .ico { background: #eaf3ff; color: #2563eb; }
+.loc-action-list li.didi   .ico { background: #fff1e6; color: #d97706; }
+.loc-action-list li.edit   .ico { background: #f0f0eb; color: #555; }
+.loc-action-list li.cancel { color: var(--text-muted); }
+.loc-action-list li.cancel .ico { background: #f5f5f5; color: #999; font-size: 16px; }
+@keyframes fadeIn { from {opacity:0} to {opacity:1} }
+@keyframes slideUp { from {transform:translateY(100%)} to {transform:translateY(0)} }
 
 /* 完成勾选 — 紧贴时间徽章右侧，16px 细描边小圆 */
 .t-check {
@@ -1632,24 +1736,39 @@ function renderTimeline() {
       </div>
       ${hotelEmpty
         ? `<p class="hotel-empty-text">点右上"＋ 设置"录入酒店，地图自动匹配位置。</p>`
-        : `<h3 class="t-title">${hotel.name || "(未命名酒店)"}</h3>
-           <div class="t-meta">
-             <span class="loc-edit" data-hotel-day="${day.n}">
-               <span class="loc-icon">📍</span><span class="loc-text${hotel.address ? "" : " empty"}">${hotel.address || "点击填写地址"}</span>
-             </span>
-           </div>`}
+        : (() => {
+            const hasH = isFinite(hotel.lat) && isFinite(hotel.lng);
+            return `<h3 class="t-title">${hotel.name || "(未命名酒店)"}</h3>
+              <div class="t-meta">
+                <span class="loc-row">
+                  <span class="loc-link" data-hotel-day="${day.n}" data-has-coord="${hasH ? "1" : "0"}"${hasH ? "" : ' title="尚未有坐标，先去设置地址"'} role="button">
+                    <span class="loc-icon">🏨</span><span class="loc-text${hotel.address ? "" : " empty"}">${hotel.address || "点击查看 / 跳转"}</span>
+                  </span>
+                  <button class="loc-edit-btn" type="button" title="修改酒店" aria-label="修改酒店">✏️</button>
+                </span>
+              </div>`;
+          })()}
     </div>
   `;
-  // 点击整个 hotel 卡片也能进入设置（除点按钮和地点编辑）
+  // 点击整个 hotel 卡片也能进入设置（除点按钮和地点链接/编辑按钮）
   hotelCard.querySelector(".t-body").addEventListener("click", (e) => {
     if (e.target.closest(".hotel-edit-mini")) return;
-    if (e.target.closest(".loc-edit")) return;
+    if (e.target.closest(".loc-link")) return;
+    if (e.target.closest(".loc-edit-btn")) return;
     openHotelModal(day.n);
   });
-  // 酒店地址行点击 → 打开酒店设置（地址在 modal 里改更顺）
-  const addr = hotelCard.querySelector(".loc-edit");
-  if (addr) {
-    addr.addEventListener("click", (e) => {
+  // 酒店地址行点击 → 弹动作面板
+  const hotelLoc = hotelCard.querySelector(".loc-link");
+  if (hotelLoc) {
+    hotelLoc.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openLocationActions({ kind: "hotel", dayN: day.n });
+    });
+  }
+  // ✏️ → 弹酒店修改
+  const hotelEditBtn = hotelCard.querySelector(".loc-edit-btn");
+  if (hotelEditBtn) {
+    hotelEditBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       openHotelModal(day.n);
     });
@@ -1665,6 +1784,7 @@ function renderTimeline() {
     card.dataset.idx = idx;
     const locDisp = resolveItemLocation(it, day.n);
     const locText = locDisp.name || "";
+    const hasCoord = !!(locDisp && isFinite(locDisp.lat) && isFinite(locDisp.lng));
     card.innerHTML = `
       <div class="t-body">
         <div class="t-time">
@@ -1673,17 +1793,21 @@ function renderTimeline() {
         </div>
         <h3 class="t-title">${it.title}</h3>
         <div class="t-meta">
-          <span class="loc-edit" data-idx="${idx}">
-            <span class="loc-icon">📍</span><span class="loc-text${locText ? "" : " empty"}">${locText || "点击填写地点"}</span>
+          <span class="loc-row">
+            <span class="loc-link" data-idx="${idx}" data-has-coord="${hasCoord ? "1" : "0"}"${hasCoord ? "" : ' title="尚未有坐标，先去设置地址"'} role="button">
+              <span class="loc-icon">📍</span><span class="loc-text${locText ? "" : " empty"}">${locText || "点击查看 / 跳转"}</span>
+            </span>
+            <button class="loc-edit-btn" type="button" title="修改地点" aria-label="修改地点">✏️</button>
           </span>
         </div>
         ${it.note ? `<p class="t-note">${it.note}</p>` : ""}
       </div>
     `;
-    // 点击卡片 → 地图飞过去（排除勾选按钮和地点编辑）
+    // 点击卡片主体 → 地图飞过去（排除勾选、地点链接、地点按钮）
     card.querySelector(".t-body").addEventListener("click", (e) => {
       if (e.target.closest(".t-check")) return;
-      if (e.target.closest(".loc-edit")) return;
+      if (e.target.closest(".loc-link")) return;
+      if (e.target.closest(".loc-edit-btn")) return;
       focusOnPOI(idx);
     });
     // 勾选完成
@@ -1695,8 +1819,13 @@ function renderTimeline() {
       renderTabs();
       renderBanner();
     });
-    // 点击地点 → 内联编辑
-    card.querySelector(".loc-edit").addEventListener("click", (e) => {
+    // 点击地址 → 弹动作面板（百度/滴滴/编辑/取消）
+    card.querySelector(".loc-link").addEventListener("click", (e) => {
+      e.stopPropagation();
+      openLocationActions({ kind: "poi", dayN: day.n, idx });
+    });
+    // 点击 ✏️ → 内联编辑
+    card.querySelector(".loc-edit-btn").addEventListener("click", (e) => {
       e.stopPropagation();
       startEditLocation(card, idx);
     });
@@ -1711,7 +1840,7 @@ function startEditLocation(card, idx) {
   const it = day.items[idx];
   if (!it) return;
   const locDisp = resolveItemLocation(it, day.n);
-  const span = card.querySelector(".loc-edit .loc-text");
+  const span = card.querySelector(".loc-link .loc-text");
   if (!span || span.classList.contains("editing")) return;
 
   const current = locDisp.name || "";
@@ -2725,6 +2854,146 @@ function jumpToTaxi(name, lng, lat) {
     setTimeout(() => { try { document.body.removeChild(iframe); } catch(e){} }, 2000);
   }
   setTimeout(() => window.open(web, "_blank"), 400);
+}
+
+// 滴滴打车：调起滴滴 APP（app 没装则降级到通用 web 叫车页）
+function jumpToDidi(name, lng, lat) {
+  const enc = encodeURIComponent;
+  // 滴滴通用 web 叫车页（带终点）；installed APP 时会被 Universal Link 接管跳到 APP
+  const url = `https://common.diditaxi.com/general/webEntry?end_name=${enc(name)}&end_lat=${lat}&end_lng=${lng}&flag=1&leifeng_point=1&from=xian-trip&hybrid=1`;
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (isMobile) {
+    // iOS Universal Link + Android App Link 都能从普通 https 跳转 APP
+    // 用 location.href 比 iframe 更稳（iframe 会被部分浏览器拦截跨域跳转）
+    const t0 = Date.now();
+    const onHide = () => { /* 已成功切到 APP */ };
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") onHide();
+    }, { once: true });
+    window.location.href = url;
+    // 2 秒后页面仍可见就打开新标签兜底
+    setTimeout(() => {
+      if (document.visibilityState === "visible" && Date.now() - t0 >= 1800) {
+        window.open(url, "_blank");
+      }
+    }, 2000);
+  } else {
+    window.open(url, "_blank");
+  }
+}
+
+// 地点动作面板：来源可以是 POI 卡片或酒店卡片
+function openLocationActions(source) {
+  // source = { kind: "poi"|"hotel", dayN, idx? }
+  const day = TRIP.days.find(d => d.n === source.dayN);
+  if (!day) return;
+  let name = "", lat = null, lng = null, hasCoord = false, editLabel = "修改地点";
+  if (source.kind === "poi") {
+    const it = day.items[source.idx];
+    if (!it) return;
+    const disp = resolveItemLocation(it, source.dayN);
+    name = it.title || disp.name || "此地";
+    // 优先用 POI 自身坐标 → 酒店 ref 坐标
+    if (it.location && isFinite(it.location.lat) && isFinite(it.location.lng)) {
+      lat = it.location.lat; lng = it.location.lng; hasCoord = true;
+    } else if (disp && isFinite(disp.lat) && isFinite(disp.lng)) {
+      lat = disp.lat; lng = disp.lng; hasCoord = true;
+    }
+    editLabel = "✏️ 修改地点";
+  } else { // hotel
+    const h = getHotelForDay(source.dayN);
+    if (!h) return;
+    name = h.name || "酒店";
+    if (isFinite(h.lat) && isFinite(h.lng)) { lat = h.lat; lng = h.lng; hasCoord = true; }
+    editLabel = "✏️ 修改酒店";
+  }
+
+  // 移除已有面板
+  const old = document.getElementById("loc-action-root");
+  if (old) old.remove();
+
+  const root = document.createElement("div");
+  root.id = "loc-action-root";
+  root.className = "loc-action-mask";
+  root.innerHTML = `
+    <div class="loc-action-sheet" role="dialog">
+      <div class="loc-action-title">
+        <b>${escHTML(name)}</b>
+        <span>${hasCoord ? `经纬度 ${lat.toFixed(4)}, ${lng.toFixed(4)} · 选择跳转方式` : (source.kind === "poi" ? "尚未录入坐标，请先编辑地点" : "酒店尚未录入坐标，请先编辑")}</span>
+      </div>
+      <ul class="loc-action-list">
+        <li class="baidu"  data-act="baidu">  <span class="ico">🗺️</span> <span>打开百度地图查看位置 / 路线</span> </li>
+        <li class="didi"   data-act="didi">   <span class="ico">🚕</span> <span>用滴滴打车（终点到此）</span> </li>
+        <li class="edit"   data-act="edit">   <span class="ico">${source.kind === "poi" ? "✏️" : "🏨"}</span> <span>${escHTML(editLabel)}</span> </li>
+        <li class="cancel" data-act="cancel"> <span class="ico">×</span> <span>取消</span> </li>
+      </ul>
+    </div>
+  `;
+  document.body.appendChild(root);
+
+  const close = () => { root.remove(); document.removeEventListener("keydown", onEsc); };
+  const onEsc = (e) => { if (e.key === "Escape") close(); };
+  document.addEventListener("keydown", onEsc);
+
+  // 点遮罩关闭
+  root.addEventListener("click", (e) => {
+    if (e.target === root) close();
+  });
+
+  // 选中项
+  root.querySelectorAll("li[data-act]").forEach(li => {
+    li.addEventListener("click", () => {
+      const act = li.dataset.act;
+      close();
+      if (act === "cancel") return;
+      if (act === "baidu") {
+        if (!hasCoord) { showToast("先 ✏️ 编辑一个地点（坐标会自动匹配）"); return; }
+        // 路线模式：起点用前一 POI（若同日）或酒店（若首 POI）；终点是当前点
+        const dest = gcj2bd(lng, lat);
+        const appNavi = `baidumap://map/direction?destination=${dest.lat},${dest.lng}&mode=driving|transit|walking&region=西安&src=webapp.xian-trip.act`;
+        const web = `https://map.baidu.com/direction?destination=${dest.lat},${dest.lng}&mode=driving&region=西安`;
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (isMobile) {
+          const iframe = document.createElement("iframe");
+          iframe.style.display = "none";
+          iframe.src = appNavi;
+          document.body.appendChild(iframe);
+          setTimeout(() => { try { document.body.removeChild(iframe); } catch(e){} }, 2000);
+        }
+        setTimeout(() => window.open(web, "_blank"), 400);
+        return;
+      }
+      if (act === "didi") {
+        if (!hasCoord) { showToast("先 ✏️ 编辑一个地点（坐标会自动匹配）"); return; }
+        jumpToDidi(name, lng, lat);
+        return;
+      }
+      if (act === "edit") {
+        if (source.kind === "poi") {
+          // 找到对应卡片的 DOM，复用内联编辑逻辑
+          const cards = document.querySelectorAll(".tl .t-card");
+          const card = cards[0]?.parentElement; // 粗略定位
+          // 直接走重构：渲染完成后调用，保证 card 节点存在
+          // 用更稳的方式：根据 idx 找
+          const t = document.getElementById("timeline");
+          if (!t) return;
+          // POI 卡片是从第 1 张开始的（hotel 在前），按 idx 找
+          const nodes = Array.from(t.children);
+          // 找到属于酒店的 t-card 之后的第 source.idx 个
+          let poiCount = -1; let target = null;
+          for (const node of nodes) {
+            if (node.classList.contains("hotel-card")) continue;
+            poiCount++;
+            if (poiCount === source.idx) { target = node; break; }
+          }
+          if (target) startEditLocation(target, source.idx);
+        } else {
+          openHotelModal(source.dayN);
+        }
+        return;
+      }
+    });
+  });
 }
 
 // 复制坐标到剪贴板
