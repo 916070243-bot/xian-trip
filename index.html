@@ -2240,7 +2240,16 @@ function initHotelMiniMap(lat, lng) {
   if (typeof BMapGL === "undefined") {
     const m = document.getElementById("hotel-mini-map");
     if (m) {
-      m.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12px;color:#888;padding:20px;text-align:center;">⚠️ 百度地图未加载<br>请检查 AK<br>可在下方直接输入经纬度或手动拾取</div>';
+      m.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12px;color:#888;padding:16px;text-align:center;line-height:1.6;">
+          <div>
+            <div style="font-size:13px;color:#444;margin-bottom:8px;">⚠️ 百度地图未加载</div>
+            <div style="text-align:left;display:inline-block;">排查顺序：</div>
+            <div style="text-align:left;display:inline-block;">① 应用类型选「浏览器端」</div>
+            <div style="text-align:left;display:inline-block;">② Referer 白名单加本站域名或 *</div>
+            <div style="text-align:left;display:inline-block;">③ 改完刷新页面即可（无需重新部署）</div>
+          </div>
+        </div>`;
     }
     return;
   }
@@ -2562,6 +2571,37 @@ function start() {
 
   // 移动端：渲染后把当前激活的 Tab 滚到视野中央
   setTimeout(() => safeCall("scrollActiveTabIntoView", scrollActiveTabIntoView), 50);
+
+  // 6 秒后检测百度地图是否加载成功；失败时显示一条不显眼的诊断条
+  setTimeout(() => {
+    if (typeof BMapGL !== "undefined") return;  // 加载成功，不打扰
+    let bar = document.getElementById("map-diag-bar");
+    if (bar) { bar.style.display = "block"; return; }
+    bar = document.createElement("div");
+    bar.id = "map-diag-bar";
+    bar.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;background:#FAEEDA;color:#854F0B;font-size:12px;line-height:1.5;padding:8px 14px;border-bottom:1px solid #EF9F27;font-family:inherit;box-shadow:0 2px 6px rgba(0,0,0,0.08);";
+    bar.innerHTML = `
+      <div style="display:flex;align-items:flex-start;gap:8px;">
+        <span style="flex:1;">⚠️ 百度地图未加载（可能是白名单/网络/微信内置浏览器问题）</span>
+        <span id="map-diag-toggle" style="cursor:pointer;user-select:none;color:#854F0B;font-weight:500;white-space:nowrap;">展开 ▾</span>
+        <span id="map-diag-close" style="cursor:pointer;user-select:none;color:#854F0B;padding:0 4px;">✕</span>
+      </div>
+      <div id="map-diag-detail" style="display:none;margin-top:8px;font-size:11.5px;line-height:1.7;">
+        <div>① 去 <a href="https://lbsyun.baidu.com/apiconsole/key" target="_blank" style="color:#854F0B;text-decoration:underline;">百度地图开放平台</a> → 应用列表 → 选你的应用 → Referer 白名单加上 <code style="background:#FAEEDA;padding:1px 4px;">916070243-bot.github.io</code> 或填 <code style="background:#FAEEDA;padding:1px 4px;">*</code></div>
+        <div>② 应用类型必须选「浏览器端」（不是「服务端」）</div>
+        <div>③ 如果在微信里打开看不到地图，复制链接到 Safari/Chrome 再试</div>
+        <div>④ 改完白名单后，刷新本页即可，无需重新部署</div>
+      </div>`;
+    document.body.appendChild(bar);
+    document.getElementById("map-diag-toggle").addEventListener("click", () => {
+      const d = document.getElementById("map-diag-detail");
+      const t = document.getElementById("map-diag-toggle");
+      const open = d.style.display !== "none";
+      d.style.display = open ? "none" : "block";
+      t.textContent = open ? "展开 ▾" : "收起 ▴";
+    });
+    document.getElementById("map-diag-close").addEventListener("click", () => { bar.remove(); });
+  }, 6000);
 }
 
 // 通用容错包装：捕获错误并在 console 显示，不让一个步骤崩溃整个 start()
