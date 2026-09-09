@@ -415,25 +415,25 @@ html, body {
   font-family: inherit;
 }
 
-/* 完成勾选 — 右侧小 ✓ 按钮 */
+/* 完成勾选 — 紧贴时间徽章右侧，16px 细描边小圆 */
 .t-check {
   margin-left: 4px;
-  width: 22px; height: 22px;
+  width: 16px; height: 16px;
   border-radius: 50%;
-  border: 1.5px solid var(--border-strong);
+  border: 1px solid var(--border-strong);
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   background: #fff;
-  transition: all 0.15s;
   flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
-.t-check:hover { border-color: #16a34a; background: #f0fdf4; }
+.t-check:hover { border-color: #16a34a; }
 .t-card.done .t-check {
   background: #16a34a;
   border-color: #16a34a;
-  color: #fff;
 }
-.t-card.done .t-check::after { content: "✓"; font-size: 12px; line-height: 1; }
+.t-card.done .t-check::after { content: "✓"; font-size: 9px; line-height: 1; color: #fff; font-weight: 700; }
 
 /* 图例 */
 .legend {
