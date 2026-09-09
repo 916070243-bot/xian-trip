@@ -824,6 +824,19 @@ html, body {
   font-size: 11.5px;
   color: var(--text-muted);
 }
+.lp-apply-range {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #fffaf0;
+  border: 1px solid #f0e5c2;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lp-apply-range .hotel-radio {
+  padding: 2px 0;
+}
 
 /* ==================== 打开 APP 前确认（iOS 风格） ==================== */
 .confirm-mask {
@@ -1332,10 +1345,10 @@ html, body {
         <div class="budget-bar"><i id="stat-budget-bar"></i></div>
         <div class="stat-sub" style="margin-top:6px;" id="stat-budget-percent">已消耗 0% · 剩余 ¥6000</div>
       </div>
-      <div class="stat stat-hotel" style="grid-column: span 2; cursor: pointer;" onclick="openHotelModal()">
+      <div class="stat stat-hotel" style="grid-column: span 2; cursor: pointer;" onclick="openLocPicker({kind:'hotel', dayN: state.activeDay})">
         <div class="budget-row">
           <span class="stat-label">🏨 今 晚 入 住</span>
-          <button class="budget-edit-btn" id="hotel-banner-btn" type="button" onclick="event.stopPropagation(); openHotelModal();">管理</button>
+          <button class="budget-edit-btn" id="hotel-banner-btn" type="button" onclick="event.stopPropagation(); openLocPicker({kind:'hotel', dayN: state.activeDay});">管理</button>
         </div>
         <div style="font-size:15px;font-weight:700;line-height:1.2;" id="stat-hotel-name">未设置酒店</div>
         <div class="stat-sub" id="stat-hotel-info">点击右上"管理"设置 Day 1 酒店</div>
@@ -1524,6 +1537,13 @@ html, body {
       </div>
       <div class="lp-manual-tip">坐标可在百度地图网页版长按地点复制</div>
     </details>
+
+    <!-- 酒店专属：应用到范围（仅当晚 / 今晚起 / 全部） -->
+    <div class="lp-apply-range" id="lp-apply-range" style="display:none;">
+      <label class="hotel-radio"><input type="radio" name="lp-apply" value="only" checked /> 仅当晚（Day <span id="lp-target-day">1</span>）</label>
+      <label class="hotel-radio"><input type="radio" name="lp-apply" value="forward" /> 今晚起到行程结束</label>
+      <label class="hotel-radio"><input type="radio" name="lp-apply" value="all" /> 全部天数（覆盖）</label>
+    </div>
 
     <div class="modal-actions">
       <button class="modal-btn" onclick="closeLocPicker()">取消</button>
@@ -1942,7 +1962,7 @@ function renderTimeline() {
     <div class="t-body">
       <div class="t-time">
         <span class="t-time-bubble">🏨 Day ${day.n} 住宿</span>
-        <button class="hotel-edit-mini" type="button" onclick="openHotelModal(${day.n})">${hotelEmpty ? "＋ 设置" : "✏️ 修改"}</button>
+        <button class="hotel-edit-mini" type="button" onclick="openLocPicker({kind:'hotel', dayN:${day.n}})">${hotelEmpty ? "＋ 设置" : "✏️ 修改"}</button>
       </div>
       ${hotelEmpty
         ? `<p class="hotel-empty-text">点右上"＋ 设置"录入酒店，地图自动匹配位置。</p>`
@@ -1965,7 +1985,7 @@ function renderTimeline() {
     if (e.target.closest(".hotel-edit-mini")) return;
     if (e.target.closest(".loc-link")) return;
     if (e.target.closest(".loc-edit-btn")) return;
-    openHotelModal(day.n);
+    openLocPicker({kind:"hotel", dayN: day.n});
   });
   // 酒店地址行点击 → 弹动作面板
   const hotelLoc = hotelCard.querySelector(".loc-link");
@@ -2391,7 +2411,7 @@ function openHotelInfoWindow(d, h) {
       <div class="bm-info-actions">
         <a class="bm-act bm-act-app" href="${appMarker}" onclick="jumpToBaiduApp('${safeName}',${h.bdLng},${h.bdLat});return false;">📱 打开手机地图</a>
         <a class="bm-act bm-act-taxi" href="${appMarker.replace('marker','direction') + '&mode=driving&region=西安&src=webapp.xian-trip.taxi'}" onclick="jumpToTaxi('${safeName}',${h.bdLng},${h.bdLat});return false;">🚗 一键打车</a>
-        <button class="bm-act bm-act-edit" type="button" onclick="openHotelModal(${d.day})">✏️ 修改酒店</button>
+        <button class="bm-act bm-act-edit" type="button" onclick="openLocPicker({kind:'hotel', dayN:${d.day}})">✏️ 修改酒店</button>
       </div>
       <div class="bm-info-foot">BD09 坐标 · ${h.bdLat.toFixed(4)}, ${h.bdLng.toFixed(4)}</div>
     </div>`;
@@ -3248,16 +3268,28 @@ function openLocPicker(source) {
 
   const day = TRIP.days.find(d => d.n === source.dayN);
   let title = "📍 选择地点", cur = "";
-  if (source.kind === "poi" && day) {
+  const isHotel = source.kind === "hotel";
+
+  // 酒店专属：显示"应用到"选项 + 重置为 only
+  const applyRangeEl = document.getElementById("lp-apply-range");
+  if (applyRangeEl) applyRangeEl.style.display = isHotel ? "flex" : "none";
+  if (isHotel) {
+    document.getElementById("lp-target-day").textContent = source.dayN;
+    document.querySelectorAll('input[name="lp-apply"]').forEach(r => {
+      r.checked = (r.value === "only");
+    });
+  }
+
+  if (isHotel) {
+    const h = getHotelForDay(source.dayN);
+    title = `🏨 选择酒店 · Day ${source.dayN}`;
+    cur = h && h.address ? h.address : (h && h.name ? h.name : "");
+  } else if (day) {
     const it = day.items[source.idx];
     if (!it) return;
     title = `📍 ${it.title}`;
     const d0 = resolveItemLocation(it, source.dayN);
     cur = d0 && d0.name ? d0.name : "";
-  } else if (source.kind === "hotel") {
-    const h = getHotelForDay(source.dayN);
-    title = `🏨 选择酒店（Day ${source.dayN}）`;
-    cur = h && h.address ? h.address : (h && h.name ? h.name : "");
   }
   document.getElementById("lp-title").textContent = title;
 
@@ -3428,12 +3460,24 @@ function confirmLocPicker() {
     it.location.lat = lpPicked.lat;
     it.location.lng = lpPicked.lng;
   } else {
-    const h = getHotelForDay(lpCtx.dayN);
-    if (h) {
-      h.name = lpPicked.name;
-      h.address = lpPicked.addr || lpPicked.name;
-      h.lat = lpPicked.lat; h.lng = lpPicked.lng;
-    }
+    // 酒店：按"应用到"范围写入
+    const range = (document.querySelector('input[name="lp-apply"]:checked') || {}).value || "only";
+    const data = {
+      name: lpPicked.name,
+      address: lpPicked.addr || lpPicked.name,
+      lat: lpPicked.lat,
+      lng: lpPicked.lng
+    };
+    const totalDays = (typeof TRIP.totalDays === "number") ? TRIP.totalDays
+                    : (TRIP.days ? TRIP.days.length : 5);
+    const targets = range === "only"    ? [lpCtx.dayN]
+                  : range === "forward" ? Array.from({length: totalDays - lpCtx.dayN + 1}, (_, i) => lpCtx.dayN + i)
+                  : Array.from({length: totalDays}, (_, i) => i + 1);
+    targets.forEach(d => {
+      let rec = TRIP.hotels.find(x => x.day === d);
+      if (!rec) TRIP.hotels.push({ day: d, ...data });
+      else { rec.name = data.name; rec.address = data.address; rec.lat = data.lat; rec.lng = data.lng; }
+    });
   }
 
   saveState();                 // ← 会触发 TripSync.push 同步给好友
@@ -3441,7 +3485,9 @@ function confirmLocPicker() {
   renderTimeline();
   renderBanner();
   try { if (typeof renderMapMarkers === "function") renderMapMarkers(); } catch (e) {}
-  showToast(`✓ 已锁定：${lpPicked.name}`);
+  showToast(lpCtx.kind === "hotel"
+    ? `✓ 已锁定酒店：${lpPicked.name}`
+    : `✓ 已锁定：${lpPicked.name}`);
 }
 
 // 复制坐标到剪贴板
