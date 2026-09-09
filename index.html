@@ -283,17 +283,10 @@ html, body {
 /* 时间轴 */
 .timeline {
   position: relative;
-  padding: 18px 20px 24px;
+  padding: 18px 16px 24px;
   overflow-y: auto;
   max-height: calc(100vh - 240px);
   flex: 1;
-}
-.timeline::before {
-  content: "";
-  position: absolute;
-  left: 38px; top: 32px; bottom: 32px;
-  width: 2px;
-  background: linear-gradient(to bottom, transparent, var(--border-strong) 12px, var(--border-strong) calc(100% - 12px), transparent);
 }
 
 /* 时间轴卡片 — 极简版：顶部色条 + 单列 + 紧凑 */
@@ -1093,7 +1086,8 @@ html, body {
     <div class="map-empty" id="map-empty">
       <strong>⚠️ 百度地图未加载</strong>
       <div>把上方 <code>&lt;script src="...api?ak=..."&gt;</code> 中的 <code>YOUR_BAIDU_KEY</code> 替换为你的百度地图 AK。</div>
-      <div style="margin-top:8px;font-size:12px;">没有 AK？去 <a href="https://lbsyun.baidu.com/" target="_blank" style="color:#c0392b;">lbsyun.baidu.com</a> 申请（控制台 → 应用 → JSAPI · 浏览器端），个人可免费申请。<br><br><b>即使没 AK 也不影响核心功能</b>：下方会自动切成 POI 列表 + 一键跳转手机百度地图 / 打车。</div>
+      <div style="margin-top:8px;font-size:12px;">去 <a href="https://lbsyun.baidu.com/" target="_blank" style="color:#c0392b;">lbsyun.baidu.com</a> 申请（控制台 → 应用 → JSAPI · 浏览器端），个人可免费申请。</div>
+      <div style="margin-top:10px;font-size:12px;color:#16a34a;">💡 没 AK 也不影响行程查看：每张卡片都有「📱手机地图 / 🚗打车 / 🌐网页版」按钮可直接跳转。</div>
     </div>
   </section>
 
@@ -1912,7 +1906,6 @@ function initMap() {
     console.warn("百度地图加载失败：请检查 AK");
     $("#map-empty").style.display = "flex";
     $("#map").style.display = "none";
-    renderMapFallback();
     renderBanner();
     return;
   }
@@ -1928,43 +1921,6 @@ function initMap() {
   state.mapReady = true;
   renderMap();
   renderBanner();
-}
-
-/* 没百度地图 AK 时：渲染 POI 列表式卡片，含跳转按钮 */
-function renderMapFallback() {
-  const wrap = document.createElement("div");
-  wrap.id = "map-fallback-list";
-  wrap.style.cssText = "position:absolute;inset:0;overflow-y:auto;background:#fafaf6;padding:16px;box-sizing:border-box;font-family:inherit;";
-  wrap.innerHTML = `
-    <div style="font-size:13px;color:#888;margin-bottom:8px;">⚠️ 百度地图未加载（KEY 缺失）；在地图区下方可直接点 POI 跳转手机百度地图 / 打车</div>
-  `;
-  const day = currentDayData();
-  day.items.forEach((it, idx) => {
-    const loc = resolveItemLocation(it, day.n);
-    const bd = gcj2bd(loc.lng, loc.lat);
-    const enc = encodeURIComponent;
-    const safeName = enc(it.title);
-    const appMarker = `baidumap://map/marker?location=${bd.lat},${bd.lng}&title=${safeName}&src=webapp.xian-trip`;
-    const appNavi   = `baidumap://map/direction?destination=${bd.lat},${bd.lng}&mode=driving&region=西安&src=webapp.xian-trip.taxi`;
-    const web       = `https://map.baidu.com/poi/?lat=${bd.lat}&lng=${bd.lng}&name=${safeName}`;
-    const row = document.createElement("div");
-    row.style.cssText = "background:#fff;border:1px solid #ece8e0;border-radius:10px;padding:12px 14px;margin-bottom:8px;";
-    row.innerHTML = `
-      <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${idx+1}. ${it.title} <span style="font-size:11px;padding:2px 6px;border-radius:4px;background:${CAT_COLOR[it.cat]}22;color:${CAT_COLOR[it.cat]};font-weight:500;">${CAT_LABEL[it.cat]}</span></div>
-      <div style="font-size:12px;color:#888;margin-bottom:8px;">${it.t} · 📍 ${loc.name}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <a href="${appMarker}" onclick="jumpToBaiduApp('${safeName}',${bd.lng},${bd.lat});return false;" style="background:#fff7ed;color:#c2410c;padding:6px 10px;border:1px solid #fed7aa;border-radius:6px;font-size:12px;text-decoration:none;">📱 手机地图</a>
-        <a href="${appNavi}" onclick="jumpToTaxi('${safeName}',${bd.lng},${bd.lat});return false;" style="background:#eff6ff;color:#2563eb;padding:6px 10px;border:1px solid #dbeafe;border-radius:6px;font-size:12px;text-decoration:none;">🚗 打车</a>
-        <a href="${web}" target="_blank" style="background:#f0f9ff;color:#0369a1;padding:6px 10px;border:1px solid #bae6fd;border-radius:6px;font-size:12px;text-decoration:none;">🌐 网页版</a>
-      </div>
-    `;
-    wrap.appendChild(row);
-  });
-  const old = document.getElementById("map-fallback-list");
-  if (old) old.remove();
-  $("#map").style.display = "none";
-  $("#map-empty").style.display = "none";
-  document.querySelector(".map-side").appendChild(wrap);
 }
 
 // 全局错误捕获：哪怕某个老 WebView 出错，也能在屏幕上看到错误，而不是空白页
@@ -1994,8 +1950,8 @@ window.addEventListener("unhandledrejection", (e) => {
 // 处理百度地图脚本加载失败
 window.addEventListener("load", () => {
   if (typeof BMapGL === "undefined") {
-    $("#map-empty").style.display = "none";
-    if (typeof renderMapFallback === "function") safeCall("load-fallback", renderMapFallback);
+    $("#map-empty").style.display = "flex";
+    $("#map").style.display = "none";
   }
 });
 
@@ -2585,7 +2541,6 @@ function start() {
       else {
         $("#map-empty").style.display = "flex";
         $("#map").style.display = "none";
-        safeCall("renderMapFallback", renderMapFallback);
       }
     }, 800);
   }
