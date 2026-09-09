@@ -296,128 +296,144 @@ html, body {
   background: linear-gradient(to bottom, transparent, var(--border-strong) 12px, var(--border-strong) calc(100% - 12px), transparent);
 }
 
+/* 时间轴卡片 — 极简版：顶部色条 + 单列 + 紧凑 */
 .t-card {
-  position: relative;
-  display: grid;
-  grid-template-columns: 40px 1fr;
-  gap: 14px;
-  padding: 6px 0 22px;
+  display: block;
+  padding: 0 0 10px;
   cursor: pointer;
 }
 .t-time {
-  position: relative;
-  z-index: 2;
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 14px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 6px;
 }
 .t-time-bubble {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: #fff;
-  border: 2px solid var(--border-strong);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #f0eee8;
   color: var(--text-secondary);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  border: none;
+  box-shadow: none;
+  font-variant-numeric: tabular-nums;
 }
 .t-card.done .t-time-bubble {
   background: #16a34a;
-  border-color: #16a34a;
   color: #fff;
 }
 .t-card.done .t-time-bubble::after {
-  content: "✓";
-  font-size: 14px;
+  content: " ✓";
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .t-body {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 12px 14px;
-  transition: all 0.2s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
-  border-left: 3px solid var(--border-strong);
+  padding: 10px 12px;
+  transition: all 0.15s;
+  box-shadow: none;
+  border-left: none;
+  border-top: 3px solid var(--border);
 }
 .t-card:hover .t-body {
   border-color: var(--border-strong);
-  box-shadow: var(--shadow-hover);
-  transform: translateX(2px);
+  border-top-color: var(--border-strong);
 }
 .t-card.active .t-body {
+  background: #fffdf3;
   border-color: var(--gold);
-  box-shadow: 0 4px 16px rgba(212,175,55,0.22);
-  background: linear-gradient(180deg, #fffdf3, #fff);
+  border-top-color: var(--gold);
+  box-shadow: 0 2px 8px rgba(212,175,55,0.18);
 }
 
-/* 类别左侧边框色 */
-.t-card.cat-att    .t-body { border-left-color: var(--att); }
-.t-card.cat-food   .t-body { border-left-color: var(--food); }
-.t-card.cat-cul    .t-body { border-left-color: var(--cul); }
-.t-card.cat-shop   .t-body { border-left-color: var(--shop); }
+/* 类别色 = 顶部 3px 实色条（替代原蓝色装饰左边框） */
+.t-card.cat-att    .t-body { border-top-color: var(--att); }
+.t-card.cat-food   .t-body { border-top-color: var(--food); }
+.t-card.cat-cul    .t-body { border-top-color: var(--cul); }
+.t-card.cat-shop   .t-body { border-top-color: var(--shop); }
 
-.t-row1 { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; flex-wrap: wrap; }
-.t-title { font-size: 15px; font-weight: 600; margin: 0; }
+.t-row1 { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: nowrap; }
+.t-title { font-size: 14.5px; font-weight: 600; margin: 0; flex: 1; min-width: 0; line-height: 1.4; }
+
+/* 分类标签 — 从蓝底徽章简化为 11px 文字 */
 .cat-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-weight: 500;
+  display: none; /* 类别已用顶部色条标识，徽章隐藏；如想保留可设回 inline-block */
 }
-.cat-badge::before {
-  content: "";
-  width: 6px; height: 6px;
-  border-radius: 50%;
-}
-.cat-att  { background: var(--att-bg);  color: var(--att); }
-.cat-att::before  { background: var(--att); }
-.cat-food { background: var(--food-bg); color: var(--food); }
-.cat-food::before { background: var(--food); }
-.cat-cul  { background: var(--cul-bg);  color: var(--cul); }
-.cat-cul::before  { background: var(--cul); }
-.cat-shop { background: var(--shop-bg); color: var(--shop); }
-.cat-shop::before { background: var(--shop); }
 
 .t-note {
-  margin: 6px 0 0;
-  font-size: 12.5px;
+  margin: 4px 0 0;
+  font-size: 12px;
   color: var(--text-secondary);
-  line-height: 1.6;
+  line-height: 1.55;
 }
 .t-meta {
-  margin-top: 8px;
+  margin-top: 6px;
   display: flex;
-  gap: 12px;
-  font-size: 11px;
+  gap: 10px;
+  font-size: 11.5px;
   color: var(--text-muted);
+  align-items: center;
+  flex-wrap: wrap;
 }
-.t-meta span::before { content: "· "; }
+.t-meta span::before { content: "· "; color: var(--border-strong); }
+.t-meta .meta-time { color: var(--text-secondary); font-weight: 500; }
+.t-meta .meta-time::before { content: ""; }
 
-/* 完成勾选 */
+/* 地点行 — 可点击编辑 */
+.t-meta .loc-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  border-bottom: 1px dashed transparent;
+  padding: 1px 2px;
+  border-radius: 3px;
+  max-width: 100%;
+}
+.t-meta .loc-edit:hover {
+  border-bottom-color: var(--text-muted);
+  background: #fafaf6;
+}
+.t-meta .loc-edit .loc-icon { font-size: 10px; opacity: 0.6; }
+.t-meta .loc-edit .loc-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+.t-meta .loc-edit .loc-text.empty { color: var(--text-muted); font-style: italic; }
+.t-meta .loc-input {
+  font-size: 12px;
+  padding: 2px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: #fff;
+  outline: none;
+  width: 160px;
+  max-width: 100%;
+  font-family: inherit;
+}
+
+/* 完成勾选 — 右侧小 ✓ 按钮 */
 .t-check {
-  margin-left: auto;
+  margin-left: 4px;
   width: 22px; height: 22px;
   border-radius: 50%;
-  border: 2px solid var(--border-strong);
+  border: 1.5px solid var(--border-strong);
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   background: #fff;
-  transition: all 0.2s;
+  transition: all 0.15s;
+  flex-shrink: 0;
 }
-.t-check:hover { border-color: #16a34a; }
+.t-check:hover { border-color: #16a34a; background: #f0fdf4; }
 .t-card.done .t-check {
   background: #16a34a;
   border-color: #16a34a;
   color: #fff;
 }
-.t-card.done .t-check::after { content: "✓"; font-size: 13px; }
+.t-card.done .t-check::after { content: "✓"; font-size: 12px; line-height: 1; }
 
 /* 图例 */
 .legend {
@@ -588,23 +604,15 @@ html, body {
 
 /* ==================== 酒店卡片（时间轴顶端） ==================== */
 .hotel-card .t-body {
-  background: linear-gradient(180deg, #fffaeb 0%, #fff 60%);
-  border-left-color: #d4af37 !important;
+  background: linear-gradient(180deg, #fffbeb 0%, #fff 80%);
+  border-top-color: #d4af37;
 }
 .hotel-card .t-time-bubble {
   background: #fef3c7;
-  border-color: #d4af37;
   color: #92400e;
-  font-size: 18px;
 }
 .hotel-card .t-title {
-  display: flex; align-items: center; gap: 6px;
-}
-.hotel-tag {
-  display: inline-flex; align-items: center;
-  font-size: 11px; padding: 2px 8px;
-  background: #fef3c7; color: #92400e;
-  border-radius: 4px; font-weight: 500;
+  margin-top: 4px;
 }
 .hotel-edit-mini {
   margin-left: auto;
@@ -624,16 +632,18 @@ html, body {
 .hotel-card.empty .t-body {
   background: #fafaf6;
   border-style: dashed;
+  border-top-style: dashed;
 }
 .hotel-card.empty .t-time-bubble {
   background: #fff;
-  border-style: dashed;
+  border: 1px dashed var(--border-strong);
   color: var(--text-muted);
 }
 .hotel-empty-text {
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--text-muted);
-  margin: 4px 0 0;
+  margin: 6px 0 0;
+  line-height: 1.5;
 }
 
 /* ==================== 预算清单 / 支出弹窗 ==================== */
@@ -1402,28 +1412,35 @@ function renderTimeline() {
   hotelCard.className = "t-card hotel-card" + (hotelEmpty ? " empty" : "");
   hotelCard.dataset.hotelCard = "1";
   hotelCard.innerHTML = `
-    <div class="t-time"><div class="t-time-bubble">🏨</div></div>
     <div class="t-body">
-      <div class="t-row1">
-        <h3 class="t-title">
-          今晚住宿 · Day ${day.n}
-          <span class="hotel-tag">${hotelEmpty ? "未设置" : "已确认"}</span>
-        </h3>
+      <div class="t-time">
+        <span class="t-time-bubble">🏨 Day ${day.n} 住宿</span>
         <button class="hotel-edit-mini" type="button" onclick="openHotelModal(${day.n})">${hotelEmpty ? "＋ 设置" : "✏️ 修改"}</button>
       </div>
       ${hotelEmpty
-        ? `<p class="hotel-empty-text">点击右上角"＋ 设置"录入酒店，地图自动匹配位置。</p>`
-        : `<div class="t-meta">
-            <span>📍 ${hotel.address || "(未填地址)"}</span>
-            <span>${hotel.lat.toFixed(4)}, ${hotel.lng.toFixed(4)}</span>
-          </div>`}
+        ? `<p class="hotel-empty-text">点右上"＋ 设置"录入酒店，地图自动匹配位置。</p>`
+        : `<h3 class="t-title">${hotel.name || "(未命名酒店)"}</h3>
+           <div class="t-meta">
+             <span class="loc-edit" data-hotel-day="${day.n}">
+               <span class="loc-icon">📍</span><span class="loc-text${hotel.address ? "" : " empty"}">${hotel.address || "点击填写地址"}</span>
+             </span>
+           </div>`}
     </div>
   `;
-  // 点击整个 hotel 卡片也能进入设置（除点按钮）
+  // 点击整个 hotel 卡片也能进入设置（除点按钮和地点编辑）
   hotelCard.querySelector(".t-body").addEventListener("click", (e) => {
-    if (e.target.classList.contains("hotel-edit-mini")) return;
+    if (e.target.closest(".hotel-edit-mini")) return;
+    if (e.target.closest(".loc-edit")) return;
     openHotelModal(day.n);
   });
+  // 酒店地址行点击 → 打开酒店设置（地址在 modal 里改更顺）
+  const addr = hotelCard.querySelector(".loc-edit");
+  if (addr) {
+    addr.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openHotelModal(day.n);
+    });
+  }
   t.appendChild(hotelCard);
 
   // 2) 渲染当日 POI 卡片
@@ -1434,26 +1451,26 @@ function renderTimeline() {
     if (idx === state.activeCardIdx) card.classList.add("active");
     card.dataset.idx = idx;
     const locDisp = resolveItemLocation(it, day.n);
+    const locText = locDisp.name || "";
     card.innerHTML = `
-      <div class="t-time"><div class="t-time-bubble">${idx + 1}</div></div>
       <div class="t-body">
-        <div class="t-row1">
-          <h3 class="t-title">${it.title}</h3>
-          <span class="cat-badge cat-${it.cat}">${{
-            att: "景点", food: "美食", cul: "文化", shop: "购物"
-          }[it.cat]}</span>
+        <div class="t-time">
+          <span class="t-time-bubble">${it.t || ""}</span>
           <div class="t-check" title="标记完成"></div>
         </div>
+        <h3 class="t-title">${it.title}</h3>
         <div class="t-meta">
-          <span>${it.t}</span>
-          <span>📍 ${locDisp.name}</span>
+          <span class="loc-edit" data-idx="${idx}">
+            <span class="loc-icon">📍</span><span class="loc-text${locText ? "" : " empty"}">${locText || "点击填写地点"}</span>
+          </span>
         </div>
         ${it.note ? `<p class="t-note">${it.note}</p>` : ""}
       </div>
     `;
-    // 点击卡片 → 地图飞过去（hotelRef 项用解析后的坐标）
+    // 点击卡片 → 地图飞过去（排除勾选按钮和地点编辑）
     card.querySelector(".t-body").addEventListener("click", (e) => {
-      if (e.target.classList.contains("t-check")) return;
+      if (e.target.closest(".t-check")) return;
+      if (e.target.closest(".loc-edit")) return;
       focusOnPOI(idx);
     });
     // 勾选完成
@@ -1465,8 +1482,66 @@ function renderTimeline() {
       renderTabs();
       renderBanner();
     });
+    // 点击地点 → 内联编辑
+    card.querySelector(".loc-edit").addEventListener("click", (e) => {
+      e.stopPropagation();
+      startEditLocation(card, idx);
+    });
     t.appendChild(card);
   });
+}
+
+/* 地点内联编辑：点开 → input → blur/Enter 保存到当前 POI 的 location.name
+   hotelRef 条目同步更新到当前酒店名 */
+function startEditLocation(card, idx) {
+  const day = currentDayData();
+  const it = day.items[idx];
+  if (!it) return;
+  const locDisp = resolveItemLocation(it, day.n);
+  const span = card.querySelector(".loc-edit .loc-text");
+  if (!span || span.classList.contains("editing")) return;
+
+  const current = locDisp.name || "";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "loc-input";
+  input.value = current;
+  input.placeholder = "输入地点";
+
+  span.classList.add("editing");
+  span.textContent = "";
+  span.appendChild(input);
+  input.focus();
+  input.select();
+
+  const commit = (save) => {
+    const val = (input.value || "").trim();
+    if (save && val !== current) {
+      if (it.hotelRef) {
+        const h = getHotelForDay(day.n);
+        if (h) h.name = val;
+      } else if (it.location) {
+        it.location.name = val;
+      }
+      saveState();
+      renderTimeline();
+      // 如果是酒店相关，地图点也要更新
+      try { renderMapMarkers && renderMapMarkers(); } catch (e) {}
+      return;
+    }
+    // 不保存 → 还原
+    span.classList.remove("editing");
+    span.textContent = val || "点击填写地点";
+    if (!val) span.classList.add("empty"); else span.classList.remove("empty");
+  };
+
+  input.addEventListener("blur", () => commit(true));
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+    else if (e.key === "Escape") { e.preventDefault(); commit(false); }
+  });
+  // 阻止 input 上的 click 冒泡触发 focusOnPOI
+  input.addEventListener("click", (e) => e.stopPropagation());
 }
 
 function currentDayData() {
