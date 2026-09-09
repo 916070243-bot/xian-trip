@@ -16,9 +16,38 @@
 <meta name="format-detection" content="telephone=no" />
 <!-- 版本号 v=20260909b —— 修改后请同步更新，强制浏览器/WebView 加载最新版本 -->
 
-<!-- 百度地图 JSAPI GL：把 BAIDU_KEY 占位符替换为你的 Key 即可显示底图。`defer` 关键 —— 没这个的话，AK 是占位符时服务端会挂着不返回，inline script 全部不执行。
-  每个 POI 气泡里带"打开百度地图 / 打车"按钮，会调起手机百度地图 APP。 -->
-<script defer src="https://api.map.baidu.com/api?v=3.0&type=webgl&ak=htmfjskCi2Z35XuInGhiPCKufDskdJ0W"></script>
+<!-- 百度地图 JSAPI GL：改用「异步 callback 加载」，由 JS 动态注入（见 loadBaiduMap）。
+  原因：v3.0 的引导脚本内部用 document.write 插入真正的地图库。若用 <script defer>，
+  脚本会在文档解析完成后执行，此时浏览器会忽略 document.write（Chrome 会拦截并告警），
+  真正的地图库永远不加载，BMapGL 恒为 undefined —— 地图白屏。
+  官方推荐的异步方式是在 URL 上带 callback 参数，百度加载完自动回调，不依赖 document.write。 -->
+<script>
+  // 百度地图加载完成后的回调（名字要与 URL 上的 callback 参数一致）
+  window.__bmapReady = false;
+  window.bmapReady = function () {
+    window.__bmapReady = true;
+    if (typeof initMap === "function") initMap();
+    if (typeof renderMap === "function") renderMap();
+    // 若酒店弹窗此时已打开（地图还没加载完就点了），补一次小地图初始化
+    try {
+      var modal = document.getElementById("hotel-modal");
+      if (modal && modal.classList.contains("show") && typeof initHotelMiniMap === "function") {
+        var pos = (typeof hotelMiniSelectedPos !== "undefined" && hotelMiniSelectedPos)
+          ? hotelMiniSelectedPos
+          : { lat: 34.2192, lng: 108.9424 };
+        initHotelMiniMap(pos.lat, pos.lng);
+      }
+    } catch (e) { console.warn("补渲染酒店小地图失败：", e); }
+  };
+  window.loadBaiduMap = function () {
+    if (typeof BMapGL !== "undefined" || window.__bmapReady) return;  // 已加载
+    var s = document.createElement("script");
+    s.src = "https://api.map.baidu.com/api?v=3.0&type=webgl&ak=htmfjskCi2Z35XuInGhiPCKufDskdJ0W&callback=bmapReady";
+    s.async = true;
+    s.onerror = function () { console.warn("百度地图脚本加载失败（网络或 AK 问题）"); };
+    document.head.appendChild(s);
+  };
+</script>
 
 <style>
 /* ==================== 全局变量与基础样式 ==================== */
@@ -1725,7 +1754,7 @@ function itemToBdPoint(item, dayN) {
 }
 
 function renderMap() {
-  if (typeof BMapGL === "undefined") {
+  if (!window.__bmapReady || typeof BMapGL === "undefined") {
     $("#map-empty").style.display = "flex";
     $("#map").style.display = "none";
     $("#map-overlay-day").textContent = `Day ${state.activeDay}`;
@@ -1907,8 +1936,8 @@ function toggleRoute() {
    Map Init
 ============================================================ */
 function initMap() {
-  if (typeof BMapGL === "undefined") {
-    console.warn("百度地图加载失败：请检查 AK");
+  if (!window.__bmapReady || typeof BMapGL === "undefined") {
+    console.warn("百度地图未就绪：脚本尚未加载完成");
     $("#map-empty").style.display = "flex";
     $("#map").style.display = "none";
     renderBanner();
@@ -1952,12 +1981,15 @@ window.addEventListener("unhandledrejection", (e) => {
   console.error("[unhandledrejection]", e.reason);
 });
 
-// 处理百度地图脚本加载失败
+// 百度地图异步加载：给足时间，6 秒后仍未就绪才判定失败并显示提示
+// （过早判定会把"还在加载中"误报成"加载失败"）
 window.addEventListener("load", () => {
-  if (typeof BMapGL === "undefined") {
-    $("#map-empty").style.display = "flex";
-    $("#map").style.display = "none";
-  }
+  setTimeout(() => {
+    if (typeof BMapGL === "undefined" && !window.__bmapReady) {
+      $("#map-empty").style.display = "flex";
+      $("#map").style.display = "none";
+    }
+  }, 6000);
 });
 
 /* ============================================================
@@ -2237,7 +2269,7 @@ function closeHotelModal() {
 }
 
 function initHotelMiniMap(lat, lng) {
-  if (typeof BMapGL === "undefined") {
+  if (!window.__bmapReady || typeof BMapGL === "undefined" || !BMapGL.Map) {
     const m = document.getElementById("hotel-mini-map");
     if (m) {
       m.innerHTML = `
@@ -2555,26 +2587,16 @@ function start() {
   safeCall("renderTimeline", renderTimeline);
   safeCall("renderBanner", renderBanner);
 
-  // 等百度地图 API ready
-  if (typeof BMapGL !== "undefined") {
-    safeCall("initMap", initMap);
-  } else {
-    // 重试一次（脚本可能晚到）
-    setTimeout(() => {
-      if (typeof BMapGL !== "undefined") safeCall("initMap(retry)", initMap);
-      else {
-        $("#map-empty").style.display = "flex";
-        $("#map").style.display = "none";
-      }
-    }, 800);
-  }
+  // 异步加载百度地图：加载完成后由 window.bmapReady 回调触发 initMap / renderMap
+  // （不再需要轮询等待，也不依赖 document.write）
+  safeCall("loadBaiduMap", loadBaiduMap);
 
   // 移动端：渲染后把当前激活的 Tab 滚到视野中央
   setTimeout(() => safeCall("scrollActiveTabIntoView", scrollActiveTabIntoView), 50);
 
   // 6 秒后检测百度地图是否加载成功；失败时显示一条不显眼的诊断条
   setTimeout(() => {
-    if (typeof BMapGL !== "undefined") return;  // 加载成功，不打扰
+    if (window.__bmapReady) return;  // 加载成功，不打扰
     let bar = document.getElementById("map-diag-bar");
     if (bar) { bar.style.display = "block"; return; }
     bar = document.createElement("div");
