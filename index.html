@@ -615,6 +615,42 @@ body.plan-editing .plan-add-btn { display: block; }
 #pi-del-btn { margin-right: auto; color: #dc2626; border-color: #fecaca; background: #fff5f5; }
 #plan-edit-btn.editing { background: #d4af37; color: #fff; border-color: #d4af37; }
 
+/* ==================== 整天（Day）新增 / 删除 ==================== */
+.day-edit-bar { display: none; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+body.plan-editing .day-edit-bar { display: flex; }
+.day-edit-btn {
+  padding: 6px 12px; border-radius: 8px;
+  border: 1.5px solid var(--border-strong); background: #fff;
+  font-size: 12px; font-family: inherit; color: var(--text-primary);
+  cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.day-edit-btn.add { border-style: dashed; background: #fffdf7; color: var(--text-secondary); }
+.day-edit-btn.danger { border-color: #fecaca; background: #fff5f5; color: #dc2626; }
+.day-edit-btn:active { transform: scale(0.98); }
+
+/* 某天没有安排时的占位提示 */
+.day-empty-tip {
+  margin: 6px 20px 4px; padding: 18px 12px;
+  border: 1.5px dashed var(--border-strong); border-radius: 10px;
+  background: #fffdf7; color: var(--text-muted, #9ca3af);
+  font-size: 13px; text-align: center; line-height: 1.6;
+}
+
+/* 新增 / 编辑某一天的弹窗 */
+.day-insert-row { display: flex; gap: 8px; margin-top: 2px; }
+.day-insert-row label { flex: 1; margin: 0; }
+.day-radio {
+  display: flex; align-items: center; gap: 6px;
+  padding: 9px 10px; border: 1.5px solid var(--border-strong); border-radius: 8px;
+  font-size: 12.5px; color: var(--text-primary); cursor: pointer;
+}
+.day-radio input { width: auto; margin: 0; }
+.day-auto-date {
+  margin-top: 6px; padding: 8px 10px; border-radius: 8px;
+  background: #fafaf6; border: 1px solid var(--border);
+  font-size: 12px; color: var(--text-secondary);
+}
+
 /* 图例 */
 .legend {
   display: flex; gap: 14px; flex-wrap: wrap;
@@ -1434,6 +1470,11 @@ body.plan-editing .plan-add-btn { display: block; }
         <div class="day-progress-bar"><i id="day-progress-bar"></i></div>
         <div class="day-progress-text" id="day-progress-text">0/0</div>
       </div>
+      <div class="day-edit-bar">
+        <button class="day-edit-btn add" type="button" onclick="openDayEditor('add')">＋ 新增一天</button>
+        <button class="day-edit-btn" type="button" onclick="openDayEditor('edit')">✏️ 改主题</button>
+        <button class="day-edit-btn danger" type="button" onclick="askDeleteDay()">🗑 删除这一天</button>
+      </div>
     </div>
 
     <div class="timeline" id="timeline"></div>
@@ -1661,6 +1702,31 @@ body.plan-editing .plan-add-btn { display: block; }
   </div>
 </div>
 
+<!-- ============ 新增 / 编辑某一天 ============ -->
+<div class="modal-mask" id="day-editor-modal">
+  <div class="modal modal-plan">
+    <h3 id="de-title">＋ 新增一天</h3>
+
+    <div id="de-insert-wrap">
+      <label>插入位置</label>
+      <div class="day-insert-row">
+        <label class="day-radio"><input type="radio" name="day-insert" value="after" checked onchange="deUpdateHint()" /> 插到 Day <span id="de-cur-day">1</span> 之后</label>
+        <label class="day-radio"><input type="radio" name="day-insert" value="last" onchange="deUpdateHint()" /> 追加到最后</label>
+      </div>
+    </div>
+
+    <label style="margin-top:12px;">这一天干嘛（主题）</label>
+    <input type="text" id="de-theme" placeholder="例如：城墙骑行 · 回民街" autocomplete="off" />
+
+    <div class="day-auto-date" id="de-date-hint">日期：—</div>
+
+    <div class="modal-actions">
+      <button class="modal-btn" onclick="closeDayEditor()">取消</button>
+      <button class="modal-btn primary" onclick="saveDayEditor()">保存</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-mask" id="hotel-modal">
   <div class="modal modal-hotel">
     <h3 id="hotel-modal-title">🏨 设置酒店</h3>
@@ -1793,7 +1859,19 @@ const TRIP = {
 const STORAGE_KEY = "xian-trip-v1";
 
 // 把当前 TRIP 状态收集成可序列化对象（本地存储 + 多人同步共用）
-const STATE_V = 2;    // 存档结构版本：v2 起把行程项本体（含新增/删除）也同步
+const STATE_V = 3;    // v2：同步行程项本体；v3：连天数（date/theme）一起同步
+
+// 把一天的行程项做成可序列化副本
+function packItems(items) {
+  return (items || []).map(it => ({
+    t: it.t || "", title: it.title || "", note: it.note || "",
+    cat: it.cat || "att", done: !!it.done, hotelRef: !!it.hotelRef,
+    location: it.location ? {
+      name: it.location.name || "", addr: it.location.addr || "",
+      lat: it.location.lat, lng: it.location.lng
+    } : null
+  }));
+}
 
 function collectState() {
   const done = TRIP.days.map(d => d.items.map(it => !!it.done));
@@ -1803,15 +1881,9 @@ function collectState() {
     budgets: TRIP.budgets,
     expenses: TRIP.expenses,
     hotels: TRIP.hotels,
-    // 行程项本体：新增 / 修改 / 删除后别人也能看到
-    items: TRIP.days.map(d => d.items.map(it => ({
-      t: it.t || "", title: it.title || "", note: it.note || "",
-      cat: it.cat || "att", done: !!it.done, hotelRef: !!it.hotelRef,
-      location: it.location ? {
-        name: it.location.name || "", addr: it.location.addr || "",
-        lat: it.location.lat, lng: it.location.lng
-      } : null
-    }))),
+    // 整天结构：天数（date/theme）+ 行程项本体
+    days: TRIP.days.map(d => ({ date: d.date || "", theme: d.theme || "", items: packItems(d.items) })),
+    items: TRIP.days.map(d => packItems(d.items)),   // 兼容 v2 读取方
     done
   };
 }
@@ -1836,7 +1908,28 @@ function applyState(state) {
       if (cur) Object.assign(cur, saved);
     });
   }
-  // v2：整份行程项（新增 / 删除 / 修改都能同步）；老存档（无 v）忽略，只按 done 合并
+  // v3：整天结构（天数 + 行程项）一起同步 —— 新增/删除整天也能同步
+  if (state.v >= 3 && Array.isArray(state.days) && state.days.length) {
+    TRIP.days = state.days.map((d0, i) => ({
+      n: i + 1,
+      date: d0.date || dateLabelForDay(i + 1),
+      theme: d0.theme || "待安排",
+      items: (Array.isArray(d0.items) ? d0.items : []).map(raw => {
+        const it = Object.assign({}, raw);
+        if (!it.location || typeof it.location !== "object") it.location = null;
+        if (typeof it.cat !== "string") it.cat = "att";
+        return it;
+      })
+    }));
+    TRIP.totalDays = TRIP.days.length;
+    TRIP.endDate = isoForDay(TRIP.days.length);
+    ensureHotels();                                   // 裁掉越界的酒店记录
+    if (state.activeDay > TRIP.days.length) state.activeDay = TRIP.days.length;
+    if (state.activeDay < 1) state.activeDay = 1;
+    return;
+  }
+
+  // v2：只有行程项（老客户端），天数沿用本地
   if (state.v >= 2 && Array.isArray(state.items)) {
     TRIP.days.forEach((d, di) => {
       const arr = state.items[di];
@@ -2071,7 +2164,9 @@ function renderTabs() {
 function renderTimeline() {
   const day = currentDayData();
   $("#day-header-title").textContent = `Day ${day.n} · ${day.theme}`;
-  $("#day-header-date").textContent = day.date + " (今天)" ;
+  // 只有真实"今天"才标注（天数是可增删的，日期按 startDate 顺推）
+  const todayInfo = getTodayDayInfo();
+  $("#day-header-date").textContent = day.date + (todayInfo.day === day.n ? " (今天)" : "");
   $("#day-header-count").textContent = `${day.items.length} 个 POI + 1 酒店`;
 
   const t = $("#timeline");
@@ -2201,6 +2296,16 @@ function renderTimeline() {
     });
     t.appendChild(card);
   });
+
+  // 3) 这一天没有任何安排时的占位提示
+  if (!day.items.length) {
+    const empty = document.createElement("div");
+    empty.className = "day-empty-tip";
+    empty.innerHTML = state.editMode
+      ? "这一天还没有安排<br>点下方「＋ 添加一项」开始规划"
+      : "这一天还没有安排<br>点右上「✎ 编辑行程」可以添加";
+    t.appendChild(empty);
+  }
 
   // 底部「添加一项」按钮文案随当前天变化
   const addBtn = document.getElementById("plan-add-btn");
@@ -3541,6 +3646,178 @@ function askConfirm({ title, body, okText, onConfirm }) {
   ok.textContent = okText || "确定";
   ok.onclick = () => { closeAppConfirm(); try { onConfirm && onConfirm(); } catch (e) {} };
   mask.style.display = "flex";
+}
+
+/* ============================================================
+   整天（Day）新增 / 删除
+   - 天数由 TRIP.days 决定，日期按 startDate 顺推
+   - 删除 / 插入后：重排 n 与日期、酒店按天平移、支出同步平移
+============================================================ */
+let deMode = "add";   // add | edit
+
+function isoForDay(n) {
+  const start = parseLocalDate(TRIP.startDate);
+  const d = new Date(start.getTime());
+  d.setDate(d.getDate() + (n - 1));
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+function dateLabelForDay(n) {
+  const start = parseLocalDate(TRIP.startDate);
+  const d = new Date(start.getTime());
+  d.setDate(d.getDate() + (n - 1));
+  return `${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
+// 按 startDate 重排每天的序号与日期，并同步 totalDays / endDate
+function renumberDays() {
+  TRIP.days.forEach((d, i) => {
+    d.n = i + 1;
+    d.date = dateLabelForDay(i + 1);
+  });
+  TRIP.totalDays = TRIP.days.length;
+  TRIP.endDate = isoForDay(TRIP.days.length);
+}
+
+// 保证 1..N 每天都有酒店记录，并裁掉越界的
+function ensureHotels() {
+  const N = TRIP.days.length;
+  const valid = TRIP.hotels.filter(h => typeof h.day === "number" && h.day >= 1 && h.day <= N);
+  const fallback = valid.slice().sort((a, b) => a.day - b.day).slice(-1)[0]
+                || { name: "", address: "", lng: 108.9424, lat: 34.2192 };
+  for (let d = 1; d <= N; d++) {
+    if (!valid.find(h => h.day === d)) {
+      valid.push({ day: d, name: fallback.name || "", address: fallback.address || "", lng: fallback.lng, lat: fallback.lat });
+    }
+  }
+  valid.sort((a, b) => a.day - b.day);
+  TRIP.hotels = valid;
+}
+
+// 删除第 dayN 天后的数据平移
+function shiftAfterRemove(dayN) {
+  TRIP.hotels = TRIP.hotels
+    .filter(h => h.day !== dayN)
+    .map(h => (h.day > dayN ? Object.assign({}, h, { day: h.day - 1 }) : h));
+  // 被删那天的记账一并删除，后面的天号前移
+  const removed = TRIP.expenses.filter(e => e.day === dayN).length;
+  TRIP.expenses = TRIP.expenses
+    .filter(e => e.day !== dayN)
+    .map(e => (e.day > dayN ? Object.assign({}, e, { day: e.day - 1 }) : e));
+  ensureHotels();
+  return removed;
+}
+
+// 在第 insertIdx 个位置（0-based）插入新的一天后的数据平移
+function shiftAfterInsert(insertIdx) {
+  const newDayNum = insertIdx + 1;
+  TRIP.hotels.forEach(h => { if (h.day >= newDayNum) h.day += 1; });
+  TRIP.expenses.forEach(e => { if (e.day >= newDayNum) e.day += 1; });
+  const prev = TRIP.hotels.find(h => h.day === newDayNum - 1);
+  TRIP.hotels.push({
+    day: newDayNum,
+    name: prev ? (prev.name || "") : "",
+    address: prev ? (prev.address || "") : "",
+    lng: prev && isFinite(prev.lng) ? prev.lng : 108.9424,
+    lat: prev && isFinite(prev.lat) ? prev.lat : 34.2192
+  });
+  ensureHotels();
+}
+
+// ---- 弹窗：新增一天 / 改主题 ----
+function openDayEditor(mode) {
+  deMode = mode === "edit" ? "edit" : "add";
+  const day = currentDayData();
+  if (!day) return;
+  document.getElementById("de-title").textContent = deMode === "edit" ? `✏️ 编辑 Day ${day.n}` : "＋ 新增一天";
+  document.getElementById("de-insert-wrap").style.display = deMode === "edit" ? "none" : "block";
+  document.getElementById("de-cur-day").textContent = day.n;
+  document.getElementById("de-theme").value = deMode === "edit" ? (day.theme || "") : "";
+  document.querySelectorAll('input[name="day-insert"]').forEach(r => { r.checked = (r.value === "after"); });
+  deUpdateHint();
+
+  const modal = document.getElementById("day-editor-modal");
+  modal.style.display = "flex";
+  modal.onclick = (e) => { if (e.target.id === "day-editor-modal") closeDayEditor(); };
+  setTimeout(() => { try { document.getElementById("de-theme").focus(); } catch (e) {} }, 120);
+}
+
+function closeDayEditor() {
+  document.getElementById("day-editor-modal").style.display = "none";
+}
+
+// 插入位置 → 预览日期
+function deUpdateHint() {
+  const hint = document.getElementById("de-date-hint");
+  if (deMode === "edit") {
+    const day = currentDayData();
+    hint.textContent = day ? `日期：${day.date}（${isoForDay(day.n)}）· 已有 ${day.items.length} 项` : "日期：—";
+    return;
+  }
+  const cur = state.activeDay;
+  const radio = document.querySelector('input[name="day-insert"]:checked');
+  const insertAt = (radio && radio.value === "last") ? TRIP.days.length : cur;   // 0-based 插入点
+  const newN = insertAt + 1;
+  hint.textContent = `新的一天会成为 Day ${newN} · ${dateLabelForDay(newN)}；后面 ${TRIP.days.length - insertAt} 天依次顺延。`;
+}
+
+function saveDayEditor() {
+  const day = currentDayData();
+  if (!day) { closeDayEditor(); return; }
+  const theme = (document.getElementById("de-theme").value || "").trim();
+
+  if (deMode === "edit") {
+    day.theme = theme || "待安排";
+    saveState();
+    closeDayEditor();
+    refreshAll();
+    showToast("✓ 已更新 Day " + day.n + " 主题");
+    return;
+  }
+
+  const radio = document.querySelector('input[name="day-insert"]:checked');
+  const insertAt = (radio && radio.value === "last") ? TRIP.days.length : state.activeDay;
+  TRIP.days.splice(insertAt, 0, { n: 0, date: "", theme: theme || "待安排", items: [] });
+  shiftAfterInsert(insertAt);
+  renumberDays();          // 重排 n / date（会覆盖新天的占位）
+  state.activeDay = insertAt + 1;
+  TRIP.currentDay = state.activeDay;
+  state.activeCardIdx = -1;
+  saveState();
+  closeDayEditor();
+  refreshAll();
+  showToast(`✓ 已新增 Day ${state.activeDay} · ${dateLabelForDay(state.activeDay)}`);
+}
+
+// ---- 删除整天 ----
+function askDeleteDay() {
+  const day = currentDayData();
+  if (!day) return;
+  if (TRIP.days.length <= 1) { showToast("至少保留一天"); return; }
+  const spent = TRIP.expenses.filter(e => e.day === day.n);
+  const spentSum = spent.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const extra = spent.length
+    ? `\n该天的 ${spent.length} 笔记账（¥${spentSum}）会一起删除，后面天数顺延。`
+    : "\n后面天数会依次前移，日期重新顺推。";
+  askConfirm({
+    title: `删除 Day ${day.n}？`,
+    body: `「Day ${day.n} · ${day.theme}」及其 ${day.items.length} 个行程项将被删除，不可恢复。${extra}`,
+    okText: "删除",
+    onConfirm: () => {
+      const n = day.n;
+      TRIP.days.splice(n - 1, 1);
+      shiftAfterRemove(n);
+      renumberDays();
+      if (state.activeDay > TRIP.days.length) state.activeDay = TRIP.days.length;
+      if (state.activeDay < 1) state.activeDay = 1;
+      TRIP.currentDay = state.activeDay;
+      state.activeCardIdx = -1;
+      saveState();
+      refreshAll();
+      showToast(`🗑 已删除 Day ${n}，行程剩 ${TRIP.days.length} 天`);
+    }
+  });
 }
 
 // 局部刷新（Tabs / 时间线 / Banner / 地图）
