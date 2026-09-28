@@ -628,6 +628,39 @@ body.plan-editing .day-edit-bar { display: flex; }
 .day-edit-btn.danger { border-color: #fecaca; background: #fff5f5; color: #dc2626; }
 .day-edit-btn:active { transform: scale(0.98); }
 
+/* 编辑模式：底部悬浮操作条（手机上一眼可见 / 拇指好点） */
+.day-fab-bar {
+  display: none;
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 70;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  gap: 10px; align-items: stretch;
+  background: rgba(255, 253, 248, 0.95);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -6px 24px rgba(120, 90, 40, 0.10);
+}
+body.plan-editing .day-fab-bar { display: flex; }
+body.plan-editing { padding-bottom: 84px; }
+.day-fab-bar button {
+  padding: 13px 10px; border-radius: 12px; font-size: 14px; font-weight: 600;
+  font-family: inherit; cursor: pointer;
+  border: 1.5px solid var(--border-strong); background: #fff; color: var(--text-primary);
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.day-fab-bar .fab-add {
+  flex: 1; background: linear-gradient(135deg, #f97316, #ea580c);
+  border-color: transparent; color: #fff; box-shadow: 0 4px 12px rgba(234, 88, 12, 0.28);
+}
+.day-fab-bar .fab-del { flex: 0 0 34%; border-color: #fecaca; background: #fff5f5; color: #dc2626; }
+.day-fab-bar button:active { transform: scale(0.97); }
+@media (min-width: 961px) {
+  .day-fab-bar {
+    left: 50%; transform: translateX(-50%); right: auto;
+    max-width: 560px; border: 1px solid var(--border); border-bottom: 0;
+    border-radius: 16px 16px 0 0;
+  }
+}
+
 /* 某天没有安排时的占位提示 */
 .day-empty-tip {
   margin: 6px 20px 4px; padding: 18px 12px;
@@ -1513,6 +1546,12 @@ body.plan-editing .day-edit-bar { display: flex; }
 
 </main>
 
+<!-- ==================== 编辑模式：底部悬浮操作条 ==================== -->
+<div class="day-fab-bar" id="day-fab-bar">
+  <button class="fab-add" type="button" onclick="openDayEditor('add')">＋ 新增 1 天</button>
+  <button class="fab-del" type="button" id="fab-del-btn" onclick="askDeleteDay()">🗑 删除本天</button>
+</div>
+
 <!-- ==================== 预算清单弹窗 ==================== -->
 <div class="modal-mask" id="budget-modal">
   <div class="modal modal-budget">
@@ -2310,6 +2349,9 @@ function renderTimeline() {
   // 底部「添加一项」按钮文案随当前天变化
   const addBtn = document.getElementById("plan-add-btn");
   if (addBtn) addBtn.textContent = `＋ 给 Day ${day.n} 添加一项`;
+  // 悬浮条上的删除按钮也跟着当前天走
+  const fabDel = document.getElementById("fab-del-btn");
+  if (fabDel) fabDel.textContent = `🗑 删除 Day ${day.n}`;
 }
 
 /* 地点内联编辑：点开 → input → blur/Enter 保存到当前 POI 的 location.name
@@ -3494,7 +3536,7 @@ function togglePlanEdit() {
     btn.textContent = state.editMode ? "✓ 完成编辑" : "✎ 编辑行程";
     btn.classList.toggle("editing", state.editMode);
   }
-  showToast(state.editMode ? "已进入编辑模式 · 可新增 / 修改 / 删除" : "已退出编辑模式");
+  showToast(state.editMode ? "已进入编辑模式 · 底部可「新增 1 天 / 删除本天」" : "已退出编辑模式");
   renderTimeline();
 }
 
