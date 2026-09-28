@@ -3357,16 +3357,18 @@ function copyText(text) {
   } catch (e) { return false; }
 }
 
-// scheme 唤起 + 失败降级。web 有值时降级跳网页版，否则只弹提示
+/* 铁律：**绝不覆盖当前页面**。
+   降级时不再 window.location.href 跳到网页版（那会把本页顶掉，用户切回来还得按返回），
+   而是在新标签页打开；且新标签页必须是用户自己点出来的（仍是手势，才不会被弹窗拦截）。 */
 function openAppOrFallback(opts) {
-  const { scheme, web, fallbackToast, copy } = opts || {};
+  const { scheme, scheme2, web, fallbackToast, copy } = opts || {};
 
   if (isWeChatBrowser()) {
     showToast("微信里禁止唤起 APP：点右上角「···」→ 用浏览器打开本页");
     return;
   }
-  if (!isMobileUA()) {                      // 桌面端直接用网页版
-    if (web) window.open(web, "_blank");
+  if (!isMobileUA()) {                      // 桌面端：新标签页看网页版
+    if (web) window.open(web, "_blank", "noopener");
     else if (fallbackToast) showToast(fallbackToast);
     return;
   }
@@ -3375,17 +3377,37 @@ function openAppOrFallback(opts) {
   let leftPage = false;
   const onVis = () => { if (document.visibilityState === "hidden") leftPage = true; };
   document.addEventListener("visibilitychange", onVis);
-
-  const t0 = Date.now();
-  setTimeout(() => {
-    document.removeEventListener("visibilitychange", onVis);
-    if (leftPage || document.visibilityState === "hidden") return;  // 已切到 APP
-    if (Date.now() - t0 < 1000) return;
-    if (web) window.location.href = web;                            // 降级网页版
-    else if (fallbackToast) showToast(fallbackToast);
-  }, 2000);
+  const gone = () => leftPage || document.visibilityState === "hidden";
+  const cleanup = () => document.removeEventListener("visibilitychange", onVis);
 
   try { window.location.href = scheme; } catch (e) {}
+
+  // 1.2s 后仍在原页 = 没唤起成功；有备用 scheme 就再试一次，否则交给用户选
+  setTimeout(() => {
+    if (gone()) { cleanup(); return; }
+    if (scheme2) {
+      try { window.location.href = scheme2; } catch (e) {}
+      setTimeout(() => {
+        if (!gone()) offerWebFallback(web, fallbackToast);
+        cleanup();
+      }, 1200);
+    } else {
+      offerWebFallback(web, fallbackToast);
+      cleanup();
+    }
+  }, 1200);
+}
+
+// 唤起失败时的唯一出口：问用户要不要用网页版（新标签页打开，不动当前页）
+function offerWebFallback(web, fallbackToast) {
+  if (!web) { if (fallbackToast) showToast(fallbackToast); return; }
+  askConfirm({
+    title: "没打开 App",
+    body: "可以改用网页版（会在新标签页打开，当前页面不受影响）",
+    okText: "网页版打开",
+    hint: "",                                    // 这不是同步类操作，不显示协作文案
+    onConfirm: () => { try { window.open(web, "_blank", "noopener"); } catch (e) {} }
+  });
 }
 
 // 百度地图 APP：name/lng/lat 均为 BD09（百度坐标系）
@@ -3406,23 +3428,32 @@ function jumpToTaxi(name, lng, lat) {
   openAppOrFallback({ scheme, web });
 }
 
-// 滴滴出行：没有公开的「带终点唤起」接口（旧的 common.diditaxi.com 域名已废），
-// 只能唤起 APP 首页 + 把终点复制到剪贴板，用户进 APP 直接粘贴。
+// 滴滴出行：官方没有公开的「网页带终点唤起」接口（旧 common.diditaxi.com 已失效）。
+// 做法：先试带终点的 scheme（沿用滴滴 webapp 的参数命名，GCJ-02），
+// 1.2s 没反应再退回最简 diditaxi:// 保证「至少能打开 App」；
+// 同时把终点名写进剪贴板，万一没自动填入，粘一次即可。
 function jumpToDidi(name, lng, lat) {
-  const coord = (isFinite(lat) && isFinite(lng)) ? `（${Number(lat).toFixed(6)}, ${Number(lng).toFixed(6)}）` : "";
-  const dest = `${name || ""}${coord}`;
+  const q = encodeURIComponent(name || "目的地");
+  const ok = isFinite(lat) && isFinite(lng);
+  const rich = ok
+    ? `diditaxi://webapp?maptype=gcj02&tolat=${lat}&tolng=${lng}&toname=${q}&toaddr=${q}&biz=1&d=${Date.now()}`
+    : null;
   openAppOrFallback({
-    scheme: "diditaxi://",
-    copy: dest,
+    scheme: rich || "diditaxi://",
+    scheme2: rich ? "diditaxi://" : null,
+    copy: name || "",
     fallbackToast: "没能唤起滴滴：终点已复制，打开滴滴粘贴即可"
   });
 }
 
-// 高德地图：官方 URI API（GCJ-02），callnative=1 会优先唤起 APP，没有则留在网页版
+// 高德地图：官方 URI 直接唤起 APP 做路线规划（GCJ-02）；
+// 没装 APP 时改用 uri.amap.com 网页版（新标签页，不动当前页）
 function jumpToAmap(name, lng, lat) {
-  const dest = encodeURIComponent(name || "目的地");
-  const uri = `https://uri.amap.com/navigation?to=${lng},${lat},${dest}&mode=car&policy=1&coordinate=gaode&callnative=1&src=webapp.xian-trip`;
-  window.location.href = uri;
+  const dname = encodeURIComponent(name || "目的地");
+  const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+  const scheme = `${ios ? "iosamap" : "androidamap"}://navi?sourceApplication=xian-trip&poiname=${dname}&lat=${lat}&lon=${lng}&dev=0&style=2`;
+  const web = `https://uri.amap.com/navigation?to=${lng},${lat},${dname}&mode=car&policy=1&coordinate=gaode&callnative=1&src=webapp.xian-trip`;
+  openAppOrFallback({ scheme, web });
 }
 
 // 地点动作面板：来源可以是 POI 卡片或酒店卡片
@@ -3696,13 +3727,14 @@ function askDeletePlanItem(idx) {
   });
 }
 
-// 通用确认弹窗（复用 app-confirm-modal）
-function askConfirm({ title, body, okText, onConfirm }) {
+// 通用确认弹窗（复用 app-confirm-modal）。hint 传空串可去掉底部小字
+function askConfirm({ title, body, okText, hint, onConfirm }) {
   const mask = document.getElementById("app-confirm-modal");
   if (!mask) { if (window.confirm(title)) try { onConfirm && onConfirm(); } catch (e) {} return; }
+  const hintText = (hint === undefined) ? "此操作会同步给同房间的好友" : hint;
   document.getElementById("app-confirm-title").textContent = title || "确认";
   document.getElementById("app-confirm-body").innerHTML =
-    `${escHTML(body || "")}<br><span style="font-size:12px;color:#888;">此操作会同步给同房间的好友</span>`;
+    `${escHTML(body || "")}${hintText ? `<br><span style="font-size:12px;color:#888;">${escHTML(hintText)}</span>` : ""}`;
   const ok = document.getElementById("app-confirm-ok");
   ok.textContent = okText || "确定";
   ok.onclick = () => { closeAppConfirm(); try { onConfirm && onConfirm(); } catch (e) {} };
@@ -3905,7 +3937,7 @@ function askOpenApp({ appName, target, detail, onConfirm }) {
   if (!mask) { onConfirm && onConfirm(); return; }
   document.getElementById("app-confirm-title").textContent = `打开「${appName}」？`;
   document.getElementById("app-confirm-body").innerHTML =
-    `${escHTML(detail || "")}<br><span style="font-size:12px;color:#888;">将会离开本页面</span>`;
+    `${escHTML(detail || "")}<br><span style="font-size:12px;color:#888;">唤起 App，不会覆盖当前页面</span>`;
   const ok = document.getElementById("app-confirm-ok");
   ok.textContent = "打开";
   // 用 onclick 覆盖，避免重复绑定
