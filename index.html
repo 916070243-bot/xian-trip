@@ -3372,7 +3372,11 @@ function openAppOrFallback(opts) {
     else if (fallbackToast) showToast(fallbackToast);
     return;
   }
-  if (copy) copyText(copy);
+  if (copy) {
+    copyText(copy);
+    // 复制成功要立刻告诉用户：这类 App 唤起来就切走了，事后再提示已经看不见了
+    if (opts.copyHint) showToast(opts.copyHint);
+  }
 
   let leftPage = false;
   const onVis = () => { if (document.visibilityState === "hidden") leftPage = true; };
@@ -3428,32 +3432,28 @@ function jumpToTaxi(name, lng, lat) {
   openAppOrFallback({ scheme, web });
 }
 
-// 滴滴出行：官方没有公开的「网页带终点唤起」接口（旧 common.diditaxi.com 已失效）。
-// 做法：先试带终点的 scheme（沿用滴滴 webapp 的参数命名，GCJ-02），
-// 1.2s 没反应再退回最简 diditaxi:// 保证「至少能打开 App」；
-// 同时把终点名写进剪贴板，万一没自动填入，粘一次即可。
+// 滴滴出行：2026-09-30 真机实测——`diditaxi://webapp?tolat=…&toname=…` 只会打开首页，
+// 参数被 App 忽略（滴滴没有公开的「带终点唤起」scheme；官方唯一的带终点通道是 MCP，
+// 需要 key + 后端代理，详见用户级 skill cn-app-deeplink）。
+// 所以这里老实做两件事：① 唤起 App；② 把终点名复制到剪贴板，进 App 粘贴一次即可。
 function jumpToDidi(name, lng, lat) {
-  const q = encodeURIComponent(name || "目的地");
-  const ok = isFinite(lat) && isFinite(lng);
-  const rich = ok
-    ? `diditaxi://webapp?maptype=gcj02&tolat=${lat}&tolng=${lng}&toname=${q}&toaddr=${q}&biz=1&d=${Date.now()}`
-    : null;
   openAppOrFallback({
-    scheme: rich || "diditaxi://",
-    scheme2: rich ? "diditaxi://" : null,
+    scheme: "diditaxi://",
     copy: name || "",
+    copyHint: "终点已复制到剪贴板，在滴滴里长按粘贴即可",
     fallbackToast: "没能唤起滴滴：终点已复制，打开滴滴粘贴即可"
   });
 }
 
-// 高德地图：官方 URI 直接唤起 APP 做路线规划（GCJ-02）；
-// 没装 APP 时改用 uri.amap.com 网页版（新标签页，不动当前页）
+// 高德地图：官方 URI 直接唤起 APP 做路线规划（GCJ-02）——终点会自动带上，
+// 进 App 后底部切到「打车」即可叫车。没装 APP 时改用 uri.amap.com 网页版（新标签页，不动当前页）
 function jumpToAmap(name, lng, lat) {
   const dname = encodeURIComponent(name || "目的地");
   const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
-  const scheme = `${ios ? "iosamap" : "androidamap"}://navi?sourceApplication=xian-trip&poiname=${dname}&lat=${lat}&lon=${lng}&dev=0&style=2`;
+  const scheme  = `${ios ? "iosamap" : "androidamap"}://navi?sourceApplication=xian-trip&poiname=${dname}&lat=${lat}&lon=${lng}&dev=0&style=2`;
+  const scheme2 = `${ios ? "iosamap" : "androidamap"}://path?sourceApplication=xian-trip&dname=${dname}&dlat=${lat}&dlon=${lng}&dev=0&t=0`;
   const web = `https://uri.amap.com/navigation?to=${lng},${lat},${dname}&mode=car&policy=1&coordinate=gaode&callnative=1&src=webapp.xian-trip`;
-  openAppOrFallback({ scheme, web });
+  openAppOrFallback({ scheme, scheme2, web });
 }
 
 // 地点动作面板：来源可以是 POI 卡片或酒店卡片
@@ -3496,9 +3496,9 @@ function openLocationActions(source) {
         <span>${hasCoord ? `经纬度 ${lat.toFixed(4)}, ${lng.toFixed(4)} · 选择跳转方式` : (source.kind === "poi" ? "尚未录入坐标，请先编辑地点" : "酒店尚未录入坐标，请先编辑")}</span>
       </div>
       <ul class="loc-action-list">
+        <li class="amap"   data-act="amap">   <span class="ico">🧭</span> <span>用「高德地图」导航 / 打车（终点自动带上）</span> </li>
         <li class="baidu"  data-act="baidu">  <span class="ico">🗺️</span> <span>在「百度地图」中打开此地点</span> </li>
-        <li class="didi"   data-act="didi">   <span class="ico">🚕</span> <span>用「滴滴出行」打车到此处</span> </li>
-        <li class="amap"   data-act="amap">   <span class="ico">🧭</span> <span>用「高德地图」导航到此处</span> </li>
+        <li class="didi"   data-act="didi">   <span class="ico">🚕</span> <span>打开「滴滴出行」（终点会复制到剪贴板）</span> </li>
         <li class="edit"   data-act="edit">   <span class="ico">${source.kind === "poi" ? "✏️" : "🏨"}</span> <span>${escHTML(editLabel)}</span> </li>
         <li class="cancel" data-act="cancel"> <span class="ico">×</span> <span>取消</span> </li>
       </ul>
@@ -3550,7 +3550,7 @@ function openLocationActions(source) {
         askOpenApp({
           appName: "高德地图",
           target: name,
-          detail: `导航前往：${name}`,
+          detail: `导航 / 打车前往：${name}（终点会自动带上）`,
           onConfirm: () => jumpToAmap(name, lng, lat)   // 高德 URI 用 GCJ-02
         });
         return;
@@ -3559,7 +3559,7 @@ function openLocationActions(source) {
         askOpenApp({
           appName: "滴滴出行",
           target: name,
-          detail: `终点：${name}`,
+          detail: `终点「${name}」会复制到剪贴板，进滴滴后长按粘贴即可（滴滴没有带终点的唤起接口）`,
           onConfirm: () => jumpToDidi(name, lng, lat)
         });
         return;
