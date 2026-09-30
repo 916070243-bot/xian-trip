@@ -3484,57 +3484,133 @@ function jumpToTaxi(name, lng, lat) {
   openAppOrFallback({ scheme, web });
 }
 
-/* 滴滴打车的后端代理地址（部署好后填这里）。
-   填了 → 点「滴滴出行」会先向代理要一个**带起终点**的深度链接，再唤起 App（真正实现自动带目的地）；
-   留空 → 自动退回「唤起 App 首页 + 终点写剪贴板」的老方案，不会报错。 */
-const DIDI_PROXY = "";
+/* ============================================================
+   滴滴打车 · 带终点唤起（2026-09-30 打通）
+   ------------------------------------------------------------
+   怎么找到的：滴滴官方 MCP 的 taxi_generate_ride_app_link 会吐出一个
+     https://v.didi.cn/<渠道码>?dlat=<终点lat>&dlng=<终点lng>&slat=<起点lat>&slng=<起点lng>
+   这个短链是**纯参数透传**的：短码固定、与坐标无关，访问它 302 跳到
+     onetravel://dache_anycar/sendorder?dchn=<渠道码>&…&dlat=..&dlng=..&slat=..&slng=..
+   所以**纯前端就能自己拼出带起终点的深链**：
+     · 不需要后端代理
+     · 不需要把 MCP Key 放进网页（Key 只在开发期问一次，拿到渠道码即可）
+   渠道码将来若失效，把 DIDI_PROXY 填上（仓库里 xian-trip-proxy/ 已备好）即可切回
+   「实时问 MCP」的方案，行为无缝。
+============================================================ */
+const DIDI_PROXY     = "";                  // 留空 = 纯前端拼链（当前方案）
+const DIDI_CHANNEL   = "XvYQEWe";           // v.didi.cn 渠道码（dchn），来自滴滴官方 MCP
+const DIDI_ENTRANCE  = "1401180167";        // 官方 302 里的 entrance_channel
+const DIDI_SHORT_URL = "https://v.didi.cn"; // 官方短链域名
+const DIDI_CHANNEL_ID = "14,011,80167";     // 官方 302 里的 channel_id（原样照抄）
 
-// 滴滴出行：2026-09-30 真机实测——`diditaxi://webapp?tolat=…&toname=…` 只会打开首页，
-// 参数被 App 忽略（滴滴没有公开的「带终点唤起」scheme；官方唯一的带终点通道是 MCP，
-// 需要 key + 后端代理，详见用户级 skill cn-app-deeplink）。
-// 所以这里老实做两件事：① 唤起 App；② 把终点名复制到剪贴板，进 App 粘贴一次即可。
-function jumpToDidi(name, lng, lat) {
+function randHex(n) {
+  let s = "";
+  while (s.length < n) s += Math.floor(Math.random() * 16).toString(16);
+  return s.slice(0, n);
+}
+
+/* 依据「起终点」拼出滴滴的深度链接与网页兜底链接（坐标均为 GCJ-02）
+   参数集与官方 302 输出保持一致（大小写、channel_id 等都照抄，减少 App 端识别差异） */
+function buildDidiLinks(toLat, toLng, fromLat, fromLng) {
+  const f = (v) => Number(v).toFixed(6);
+  const hasFrom = isFinite(fromLat) && isFinite(fromLng);
+  let q = `dlat=${f(toLat)}&dlng=${f(toLng)}`;
+  if (hasFrom) q += `&slat=${f(fromLat)}&slng=${f(fromLng)}`;
+  const sid = randHex(32);
+  const scheme =
+    `OneTravel://dache_anycar/sendorder?dchn=${DIDI_CHANNEL}&prod_key=custom&x_act_key=` +
+    `&xenv=passenger&entrance_channel=${DIDI_ENTRANCE}&xoid=&${q}` +
+    `&xpsid=${sid}&xpsid_root=${sid}&xpsid_from=&xspm_from=` +
+    `&f_xpsid=${sid}&root_xpsid=${sid}&channel_id=${DIDI_CHANNEL_ID}`;
+  return { scheme, web: `${DIDI_SHORT_URL}/${DIDI_CHANNEL}?${q}`, hasFrom };
+}
+
+/* 定位预热：用户点开地点面板时就悄悄取一次，等真的点「滴滴」时通常已就绪 */
+const DIDI_POS_TTL = 5 * 60 * 1000;
+let didiPos = { at: 0, val: null };
+function prewarmPosition() {
+  if (didiPos.val && Date.now() - didiPos.at < DIDI_POS_TTL) return;
+  try {
+    getCurrentLatLng(4000).then((v) => { if (v) didiPos = { at: Date.now(), val: v }; }).catch(() => {});
+  } catch (e) { /* 定位不可用就算了，起点会交给滴滴自己取 */ }
+}
+function cachedPosition() {
+  return (didiPos.val && Date.now() - didiPos.at < DIDI_POS_TTL) ? didiPos.val : null;
+}
+
+/* 唤起滴滴：带上终点。方案 = 自己拼的 onetravel 深链 → diditaxi://（保底开 App）
+   → 用户确认后用新标签页打开 v.didi.cn 短链（不动当前页） */
+function jumpToDidi(name, lng, lat, from) {
+  const toLat = Number(lat), toLng = Number(lng);
+  if (!isFinite(toLat) || !isFinite(toLng)) {   // 没坐标：退回老方案
+    openAppOrFallback({
+      scheme: "diditaxi://",
+      copy: name || "",
+      copyHint: "终点已复制到剪贴板，在滴滴里长按粘贴即可",
+      fallbackToast: "没能唤起滴滴：终点已复制，打开滴滴粘贴即可"
+    });
+    return;
+  }
+  const p = from && isFinite(from.lat) && isFinite(from.lng) ? from : null;
+  const { scheme, web } = buildDidiLinks(toLat, toLng, p && p.lat, p && p.lng);
   openAppOrFallback({
-    scheme: "diditaxi://",
-    copy: name || "",
-    copyHint: "终点已复制到剪贴板，在滴滴里长按粘贴即可",
-    fallbackToast: "没能唤起滴滴：终点已复制，打开滴滴粘贴即可"
+    scheme,
+    scheme2: "diditaxi://",
+    web,
+    fallbackToast: "没能唤起滴滴，可改用网页版叫车"
   });
 }
 
 /* 点「滴滴出行」的总入口：
-   配了后端代理 → 先拿「带起终点」的深度链接，再请用户确认后唤起（真正的自动带目的地）；
-   没配/拿不到 → 老方案兜底，功能不会消失。 */
+   有后端代理 → 先向代理要深链（渠道码失效时的备用路线）；
+   没有 → 纯前端拼链。两条路都保证「终点自动带上」。 */
 async function openDidiTaxi(name, lng, lat) {
-  if (!DIDI_PROXY) { jumpToDidi(name, lng, lat); return; }
+  // 起点：优先用刚预热的定位；没有就短等一下（等不到就不带起点，交给滴滴取当前位置）
+  let from = cachedPosition();
+  if (!from && navigator.geolocation) {
+    try {
+      const p = await Promise.race([
+        getCurrentLatLng(1500),
+        new Promise((r) => setTimeout(() => r(null), 1700))
+      ]);
+      if (p) { from = p; didiPos = { at: Date.now(), val: p }; }
+    } catch (e) { from = null; }
+  }
 
-  showToast("正在生成打车链接…");
-  let from = null;
-  try { from = await getCurrentLatLng(3500); } catch (e) { from = null; }
-
-  const qs = new URLSearchParams({ tlat: String(lat), tlng: String(lng) });
-  if (from) { qs.set("flat", String(from.lat)); qs.set("flng", String(from.lng)); }
-
-  let link = null;
-  try {
-    const r = await fetch(`${DIDI_PROXY}/taxi?${qs.toString()}`, { cache: "no-store" });
-    const j = await r.json();
-    if (j && j.ok && j.url) link = j.url;
-  } catch (e) { link = null; }
-
-  if (!link) { jumpToDidi(name, lng, lat); return; }   // 代理挂了/超时 → 老方案
+  // 备用路线：配了代理就先向代理要一次深链（渠道码失效时用）
+  let viaProxy = null;
+  if (DIDI_PROXY) {
+    try {
+      const qs = new URLSearchParams({ tlat: String(lat), tlng: String(lng) });
+      if (from) { qs.set("flat", String(from.lat)); qs.set("flng", String(from.lng)); }
+      const r = await fetch(`${DIDI_PROXY}/taxi?${qs.toString()}`, { cache: "no-store" });
+      const j = await r.json();
+      if (j && j.ok) {
+        // 只有 scheme 才允许进 location.href；http(s) 一律只当新标签页兜底
+        if (j.scheme && !/^https?:/i.test(j.scheme)) viaProxy = { scheme: j.scheme, web: j.web || j.url || null };
+        else if (j.url || j.web) viaProxy = { scheme: null, web: j.web || j.url };
+      }
+    } catch (e) { viaProxy = null; }
+  }
 
   askOpenApp({
     appName: "滴滴出行",
     target: name,
     detail: from
-      ? `已带上终点「${name}」，起点用你的当前位置`
-      : `已带上终点「${name}」（没拿到定位，起点默认西安市中心）`,
-    onConfirm: () => openAppOrFallback({
-      scheme: link,
-      copy: name || "",
-      fallbackToast: "没能唤起滴滴：终点已复制，打开滴滴粘贴即可"
-    })
+      ? `终点「${name}」和你的当前位置都会自动填好`
+      : `终点「${name}」会自动填好，起点用滴滴取你的当前位置`,
+    onConfirm: () => {
+      const p2 = from && isFinite(from.lat) && isFinite(from.lng) ? from : null;
+      const web = buildDidiLinks(Number(lat), Number(lng), p2 && p2.lat, p2 && p2.lng).web;
+      if (viaProxy && viaProxy.scheme) {
+        openAppOrFallback({ scheme: viaProxy.scheme, scheme2: "diditaxi://", web: viaProxy.web || web, fallbackToast: "没能唤起滴滴，可改用网页版叫车" });
+      } else if (viaProxy && viaProxy.web) {
+        // 代理只给了网页链接 → 仍是用户点击手势内开新标签页，不动当前页
+        window.open(viaProxy.web, "_blank", "noopener");
+      } else {
+        jumpToDidi(name, lng, lat, from);
+      }
+    }
   });
 }
 
@@ -3590,14 +3666,17 @@ function openLocationActions(source) {
       </div>
       <ul class="loc-action-list">
         <li class="amap"   data-act="amap">   <span class="ico">🧭</span> <span>用「高德地图」导航 / 打车（终点自动带上）</span> </li>
+        <li class="didi"   data-act="didi">   <span class="ico">🚕</span> <span>用「滴滴出行」打车（终点自动带上）</span> </li>
         <li class="baidu"  data-act="baidu">  <span class="ico">🗺️</span> <span>在「百度地图」中打开此地点</span> </li>
-        <li class="didi"   data-act="didi">   <span class="ico">🚕</span> <span>打开「滴滴出行」（终点会复制到剪贴板）</span> </li>
         <li class="edit"   data-act="edit">   <span class="ico">${source.kind === "poi" ? "✏️" : "🏨"}</span> <span>${escHTML(editLabel)}</span> </li>
         <li class="cancel" data-act="cancel"> <span class="ico">×</span> <span>取消</span> </li>
       </ul>
     </div>
   `;
   document.body.appendChild(root);
+
+  // 面板一打开就悄悄取一次定位（打车时起点才能立刻带上，不耽误唤起）
+  if (hasCoord) prewarmPosition();
 
   const close = () => { root.remove(); document.removeEventListener("keydown", onEsc); };
   const onEsc = (e) => { if (e.key === "Escape") close(); };
@@ -3649,7 +3728,7 @@ function openLocationActions(source) {
         return;
       }
       if (act === "didi") {
-        // 交给 openDidiTaxi：配了后端代理就自动带起终点，没配就退回剪贴板方案
+        // openDidiTaxi：纯前端拼出带起终点的 onetravel 深链并唤起 App
         openDidiTaxi(name, lng, lat);
         return;
       }
